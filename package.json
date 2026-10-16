@@ -1,6 +1,7 @@
 {
   "name": "frem-development-tools",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "format": "prettier --write .",

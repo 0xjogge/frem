@@ -63,3 +63,7 @@ Fix formatting with `npm run format` and `./gradlew spotlessApply`. Pull request
 Push a tag such as **`0.1-release`** to build a signed APK and publish a release with grouped changelog notes. The first number is for features; the second is for patches.
 
 [**Release guide →**](RELEASING.md) · [**Changelog →**](https://github.com/0xjogge/frem/releases)
+
+## License
+
+Frem is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
