@@ -2,7 +2,6 @@
 """Verify the signed APK's identity and version before staging release assets."""
 
 import argparse
-import hashlib
 import os
 from pathlib import Path
 import re
@@ -34,17 +33,11 @@ def main():
     if expected not in badging or "application-debuggable" in badging:
         raise SystemExit("APK package, version, or debuggable flag does not match the release.")
     output = Path("build/release")
-    output.mkdir(parents=True, exist_ok=True)
-    assets = [
-        (apk, f"frem-{args.tag}-universal.apk"),
-        (Path("app/build/outputs/mapping/release/mapping.txt"), f"frem-{args.tag}-mapping.txt"),
-    ]
-    checksums = []
-    for source, name in assets:
-        shutil.copyfile(source, output / name)
-        digest = hashlib.sha256((output / name).read_bytes()).hexdigest()
-        checksums.append(f"{digest}  {name}")
-    (output / "SHA256SUMS").write_text("\n".join(checksums) + "\n")
+    if output.exists():
+        shutil.rmtree(output)
+    output.mkdir(parents=True)
+    name = f"frem-{args.tag}.apk"
+    shutil.copyfile(apk, output / name)
     print(verification)
     print(f"Verified dk.frem.app {feature}.{patch}; release assets staged in {output}")
 

@@ -12,7 +12,7 @@
 
 ## Install
 
-**Android 10 or newer.** Download the `frem-…-universal.apk` from [**GitHub Releases →**](https://github.com/0xjogge/frem/releases/latest), then open it to install.
+**Android 10 or newer.** Download the `frem-…-release.apk` from [**GitHub Releases →**](https://github.com/0xjogge/frem/releases/latest), then open it to install.
 
 For update checks with [Obtainium](https://obtainium.imranr.dev/), add this GitHub source:
 

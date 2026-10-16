@@ -26,11 +26,7 @@ git push origin 0.1-release
 
 Follow the [Release workflow](https://github.com/0xjogge/frem/actions/workflows/release.yml). It validates the version and tag ancestry, runs the full verification workflow, builds with R8/resource shrinking and the permanent release key, and checks the APK's certificate, package ID, version, and non-debuggable status before publishing.
 
-The release is staged as a draft with all assets attached, then published as a stable release marked latest. For `0.1-release`, assets are:
-
-- `frem-0.1-release-universal.apk`
-- `frem-0.1-release-mapping.txt` (R8 mapping for decoding crash reports)
-- `SHA256SUMS` (checksums for the APK and mapping)
+The release is staged as a draft with its APK attached, then published as a stable release marked latest. For `0.1-release`, the sole release attachment is **`frem-0.1-release.apk`**, a universal APK for supported device architectures. The grouped changelog appears in the release description.
 
 If a run fails, fix the cause and use **Re-run failed jobs**. The workflow can resume an unpublished draft. A published release is immutable in the release workflow; use the next patch version for a new APK.
 
@@ -103,6 +99,6 @@ After the repository is public and a release is published:
 
 1. Add `https://github.com/0xjogge/frem` as a GitHub source in Obtainium.
 2. Keep pre-releases disabled. Tags ending in `-release` are explicitly published as stable releases.
-3. The single universal APK is selected automatically; an optional APK filter is `^frem-[0-9]+\.[0-9]+-release-universal\.apk$`.
+3. The single APK is selected automatically; an optional APK filter is `^frem-[0-9]+\.[0-9]+-release\.apk$`.
 
-The package ID stays `dk.frem.app`, the signing certificate stays constant, and Android version codes increase. Obtainium can read the GitHub release notes and install subsequent versions as updates. You can verify a downloaded APK with `sha256sum --check SHA256SUMS` when the listed files are in the same directory.
+The package ID stays `dk.frem.app`, the signing certificate stays constant, and Android version codes increase. Obtainium can read the GitHub release notes and install subsequent versions as updates.
