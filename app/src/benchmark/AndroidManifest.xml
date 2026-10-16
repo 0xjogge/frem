@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <profileable android:shell="true" />
+        <receiver android:name=".performance.FrameMetricsReceiver" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter><action android:name="dk.frem.app.FRAME_METRICS" /></intent-filter>
+        </receiver>
+    </application>
+</manifest>

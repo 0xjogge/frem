@@ -1,0 +1,10 @@
+# Explicit app-specific rules: this device's OS disables JIT profile recording.
+# Syntax follows Google's manually-defined Baseline Profile guidance.
+# Compose, Room, Activity, and other Jetpack dependencies add their consumer profiles.
+Ldk/frem/app/MainActivity;
+Ldk/frem/app/FremApplication;
+HSPLdk/frem/app/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLdk/frem/app/MainActivity;->onResume()V
+HSPLdk/frem/app/ui/**->**(**)**
+HPLdk/frem/app/domain/**->**(**)**
+HPLdk/frem/app/data/**->**(**)**

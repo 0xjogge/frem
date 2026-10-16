@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
+  <title id="title">Frem</title>
+  <desc id="description">Your health, on your phone. A native, local-first Android companion.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#173B2A" />
+      <stop offset="1" stop-color="#315B42" />
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#DBF0AA" stop-opacity="0.15" />
+      <stop offset="1" stop-color="#DBF0AA" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="360" rx="32" fill="url(#background)" />
+  <circle cx="1030" cy="150" r="280" fill="url(#glow)" />
+  <g fill="none" stroke="#DBF0AA" opacity="0.12">
+    <circle cx="1030" cy="180" r="110" stroke-width="34" />
+    <circle cx="1030" cy="180" r="169" stroke-width="1" />
+    <circle cx="1030" cy="180" r="213" stroke-width="1" />
+    <path d="M810 302 925 187l72 51 132-139" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g transform="translate(68 79)">
+    <rect width="84" height="84" rx="26" fill="#DBF0AA" />
+    <path d="M20 58 38 26h12L32 58zM41 58 59 26h12L53 58z" fill="#234D39" />
+    <text x="108" y="63" font-family="sans-serif" font-size="78" font-weight="700" letter-spacing="-4" fill="#F3F6EB">frem</text>
+    <path d="M338 44h27v27m-27 0 27-27" fill="none" stroke="#DBF0AA" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+    <text y="140" font-family="sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5" fill="#F3F6EB">Your health, on your phone.</text>
+    <text y="182" font-family="sans-serif" font-size="19" fill="#CBD8C7">Native Android. Local-first. Built for every day.</text>
+  </g>
+</svg>

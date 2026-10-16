@@ -1,0 +1,7 @@
+.direnv/
+.gradle/
+.kotlin/
+.signing/
+**/build/
+node_modules/
+app/

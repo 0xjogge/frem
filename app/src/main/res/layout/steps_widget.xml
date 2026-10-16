@@ -1,0 +1,12 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+    android:padding="18dp" android:gravity="center_vertical" android:background="@drawable/widget_background">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="frem  ↗"
+        android:textColor="#DCF0AB" android:textSize="16sp" android:textStyle="bold" />
+    <TextView android:id="@+id/widget_steps" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="—" android:textColor="#FFFFFF" android:textSize="36sp" android:textStyle="bold" />
+    <ProgressBar android:id="@+id/widget_progress" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="6dp" android:progressTint="#DCF0AB" android:progressBackgroundTint="#55725A" android:max="100" />
+    <TextView android:id="@+id/widget_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="Open Frem to connect" android:textColor="#D3DECF" android:textSize="12sp" />
+</LinearLayout>
