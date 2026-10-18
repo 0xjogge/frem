@@ -12,57 +12,27 @@
 
 ## Install
 
-**Android 10 or newer.** Download the `frem-…-release.apk` from [**GitHub Releases →**](https://github.com/0xjogge/frem/releases/latest), then open it to install.
+**Android 10 or newer.** Download the APK from [GitHub Releases](https://github.com/0xjogge/frem/releases/latest), then open it to install.
 
-For update checks with [Obtainium](https://obtainium.imranr.dev/), add this GitHub source:
+For update checks, add `https://github.com/0xjogge/frem` to [Obtainium](https://obtainium.imranr.dev/).
 
-```text
-https://github.com/0xjogge/frem
-```
+## Features
 
-Public downloads become available when the repository is public and the first release is published.
-
-## Everyday health, in one place
-
-- **Move:** steps, distance, activity history, daily goals, and streaks.
-- **Check in:** weight, body measurements, hydration, and optional reminders.
-- **Connect:** import sleep, heart rate, workouts, and more through Health Connect.
-- **Make it yours:** light/dark themes, wallpaper colors, metric/imperial units, and CSV export.
-
-Your records stay on your phone. You choose Health Connect permissions and what to export; missing readings are never presented as zero.
+- Steps, distance, activity history, daily goals, and streaks.
+- Weight, body measurements, hydration, and reminders.
+- Sleep, heart rate, and workout imports through Health Connect.
+- Light/dark themes, metric/imperial units, and CSV export.
 
 <p align="center">
   <img src="docs/images/frem-light.png" alt="Frem Today screen in light mode" width="240" />
   <img src="docs/images/frem-dark.png" alt="Frem Today screen in dark mode" width="240" />
 </p>
 
-## Develop
+## Documentation
 
-The pinned [Nix](https://nixos.org/download/) environment includes JDK 21, Android SDK 37, Node.js, Python, and ADB:
-
-```sh
-nix develop
-npm ci --ignore-scripts
-./gradlew :app:assembleDebug
-./gradlew :app:installDebug
-```
-
-Enable USB debugging and connect a device for `installDebug`. Without Nix, provide JDK 21, Android SDK 37.0, build tools 36.0.0, and Node.js.
-
-### Check and format
-
-```sh
-npm run format:check
-./gradlew spotlessCheck :app:lintDebug :app:testDebugUnitTest
-```
-
-Fix formatting with `npm run format` and `./gradlew spotlessApply`. Pull requests also build debug/release APKs and run the device-test suite on an emulator. [View CI →](https://github.com/0xjogge/frem/actions/workflows/ci.yml)
-
-## Release
-
-Push a tag such as **`0.1-release`** to build a signed APK and publish a release with grouped changelog notes. The first number is for features; the second is for patches.
-
-[**Release guide →**](RELEASING.md) · [**Changelog →**](https://github.com/0xjogge/frem/releases)
+- [Development](docs/development.md) — build, run, and test.
+- [Releasing](RELEASING.md) — versioning and publishing.
+- [Changelog](https://github.com/0xjogge/frem/releases).
 
 ## License
 
