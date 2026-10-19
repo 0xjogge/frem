@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -36,14 +37,17 @@ import dk.frem.app.BuildConfig
 import dk.frem.app.data.*
 import dk.frem.app.domain.Insights
 import dk.frem.app.domain.ReminderMessage
+import dk.frem.app.maps.MapCache
 import dk.frem.app.performance.FrameDiagnostics
 import dk.frem.app.performance.ObserveBenchmarkScroll
+import dk.frem.app.recording.*
 import dk.frem.app.reminders.ReminderNotifications
 import dk.frem.app.widget.StepsWidget
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -57,6 +61,7 @@ data class AppData(
     val granted: Set<String>,
     val sameTimeAverage: Long?,
     val today: LocalDate,
+    val recordedActivities: List<ActivitySession> = emptyList(),
 ) {
     val day: DaySummary? by lazy { days.find { it.date == today.toString() } }
     val latestWeight: LogEntry? by lazy { entries.firstOrNull { it.kind == LogKind.WEIGHT.name } }
@@ -75,6 +80,12 @@ fun FremApp(vm: FremViewModel) {
     val days by vm.days.collectAsStateWithLifecycle()
     val entries by vm.entries.collectAsStateWithLifecycle()
     val workouts by vm.workouts.collectAsStateWithLifecycle()
+    val recordedActivities by vm.recordedActivities.collectAsStateWithLifecycle()
+    val activeRecording by vm.activeRecording.collectAsStateWithLifecycle()
+    val recordingLive by vm.recordingLive.collectAsStateWithLifecycle()
+    val recordingBusy by vm.recordingBusy.collectAsStateWithLifecycle()
+    val recordingDestination by vm.recordingDestination.collectAsStateWithLifecycle()
+    val recordingMessage by vm.recordingMessage.collectAsStateWithLifecycle()
     val nights by vm.nights.collectAsStateWithLifecycle()
     val hours by vm.hours.collectAsStateWithLifecycle()
     val granted by vm.granted.collectAsStateWithLifecycle()
@@ -87,8 +98,30 @@ fun FremApp(vm: FremViewModel) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     val today = now.toLocalDate()
     val liveData =
-        remember(days, entries, workouts, nights, preferences, hours, granted, sameTime, today) {
-            AppData(days, entries, workouts, nights, preferences, hours, granted, sameTime, today)
+        remember(
+            days,
+            entries,
+            workouts,
+            nights,
+            preferences,
+            hours,
+            granted,
+            sameTime,
+            today,
+            recordedActivities,
+        ) {
+            AppData(
+                days,
+                entries,
+                workouts,
+                nights,
+                preferences,
+                hours,
+                granted,
+                sameTime,
+                today,
+                recordedActivities,
+            )
         }
     val fixture =
         if (BuildConfig.FRAME_DIAGNOSTICS)
@@ -99,6 +132,34 @@ fun FremApp(vm: FremViewModel) {
             fixture?.copy(preferences = preferences, granted = granted) ?: liveData
         }
     val navigation = rememberFremNavigation()
+    var selectedActivityId by rememberSaveable { mutableStateOf<String?>(null) }
+    var recordingSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val immersive =
+        navigation.current in setOf(FremDestination.RECORDING, FremDestination.ACTIVITY_DETAIL)
+    val routeId =
+        when (navigation.current) {
+            FremDestination.RECORDING -> activeRecording?.id ?: recordingSessionId
+            FremDestination.ACTIVITY_DETAIL -> selectedActivityId
+            else -> null
+        }
+    val routePoints by
+        remember(routeId) {
+                routeId?.let(vm.recording::points) ?: flowOf(emptyList())
+            }
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedActivity = recordedActivities.firstOrNull { it.id == selectedActivityId }
+    fun openRecorder() {
+        recordingSessionId = activeRecording?.id
+        vm.recordingMessage.value = null
+        navigation.navigate(FremDestination.ACTIVITY)
+        navigation.navigate(FremDestination.RECORDING)
+    }
+    fun openActivity(id: String) {
+        selectedActivityId = id
+        recordingSessionId = null
+        navigation.navigate(FremDestination.ACTIVITY)
+        navigation.navigate(FremDestination.ACTIVITY_DETAIL)
+    }
     var metric by remember { mutableStateOf<Metric?>(null) }
     var logging by remember { mutableStateOf<LogKind?>(null) }
     var editing by remember { mutableStateOf<LogEntry?>(null) }
@@ -129,6 +190,95 @@ fun FremApp(vm: FremViewModel) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
+    var pendingActivityType by rememberSaveable { mutableStateOf<ActivityType?>(null) }
+    var pendingRecordingResume by rememberSaveable { mutableStateOf(false) }
+    var recordingPermissionHelp by rememberSaveable { mutableStateOf(false) }
+    var recordingLocationHelp by rememberSaveable { mutableStateOf(false) }
+    var mapCacheDialog by remember { mutableStateOf(false) }
+    var mapCacheDescription by remember { mutableStateOf("Checking map cache…") }
+    var clearingMapCache by remember { mutableStateOf(false) }
+    var gpxActivityId by rememberSaveable { mutableStateOf<String?>(null) }
+    fun completeRecordingRequest() {
+        val type = pendingActivityType ?: return
+        if (
+            context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            recordingPermissionHelp = true
+            return
+        }
+        if (!context.getSystemService(LocationManager::class.java).isLocationEnabled) {
+            recordingLocationHelp = true
+            return
+        }
+        val resume = pendingRecordingResume
+        pendingActivityType = null
+        pendingRecordingResume = false
+        vm.recordingAction {
+            if (resume) vm.recording.resumeAndAwait()
+            else recordingSessionId = vm.recording.start(type)
+        }
+    }
+    val recordingSettings =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            completeRecordingRequest()
+        }
+    val recordingPermissions =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            completeRecordingRequest()
+        }
+    fun requestRecording(type: ActivityType, resume: Boolean = false) {
+        pendingActivityType = type
+        pendingRecordingResume = resume
+        val required = mutableListOf<String>()
+        if (
+            context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            required += Manifest.permission.ACCESS_COARSE_LOCATION
+            required += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        val permissionPreferences =
+            context.getSharedPreferences("frem_recording_ui", android.content.Context.MODE_PRIVATE)
+        if (
+            Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED &&
+                !permissionPreferences.getBoolean("asked_notifications", false)
+        ) {
+            permissionPreferences.edit().putBoolean("asked_notifications", true).apply()
+            required += Manifest.permission.POST_NOTIFICATIONS
+        }
+        if (required.isEmpty()) completeRecordingRequest()
+        else recordingPermissions.launch(required.toTypedArray())
+    }
+    val exportGpx =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/gpx+xml"),
+        ) { uri ->
+            val id = gpxActivityId
+            gpxActivityId = null
+            if (uri != null && id != null)
+                scope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val session =
+                                vm.recording.getSession(id)
+                                    ?: error("This activity no longer exists.")
+                            val gpx = GpxExport.create(session, vm.recording.getPoints(id))
+                            val output =
+                                context.contentResolver.openOutputStream(uri)
+                                    ?: error("Couldn’t open the export location.")
+                            output.bufferedWriter().use { it.write(gpx) }
+                        }
+                        snackbar.showSnackbar("Your activity was exported as GPX.")
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        snackbar.showSnackbar("Export failed: ${e.message}")
+                    }
+                }
+        }
     val health = vm.repository.health
     var requestingBackground by rememberSaveable { mutableStateOf(false) }
     val permissions =
@@ -206,7 +356,14 @@ fun FremApp(vm: FremViewModel) {
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            val csv = CsvExport.create(entries, days, workouts, nights)
+                            val csv =
+                                CsvExport.create(
+                                    entries,
+                                    days,
+                                    workouts,
+                                    nights,
+                                    recordedActivities,
+                                )
                             val output =
                                 context.contentResolver.openOutputStream(uri)
                                     ?: error("Couldn’t open the export location.")
@@ -255,6 +412,22 @@ fun FremApp(vm: FremViewModel) {
             vm.dismissMessage()
         }
     }
+    LaunchedEffect(recordingDestination) {
+        if (recordingDestination) {
+            openRecorder()
+            vm.recordingDestination.value = false
+        }
+    }
+    LaunchedEffect(activeRecording?.id) {
+        activeRecording?.id?.let { recordingSessionId = it }
+    }
+    LaunchedEffect(recordingSessionId, recordedActivities, navigation.current) {
+        if (navigation.current == FremDestination.RECORDING) {
+            recordedActivities
+                .firstOrNull { it.id == recordingSessionId && it.state == RecordingState.FINISHED }
+                ?.let { openActivity(it.id) }
+        }
+    }
     LaunchedEffect(reminderDestination) {
         reminderDestination?.let {
             when (it) {
@@ -291,25 +464,41 @@ fun FremApp(vm: FremViewModel) {
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
+            floatingActionButton = {
+                if (
+                    activeRecording != null &&
+                        !immersive &&
+                        navigation.current != FremDestination.ACTIVITY
+                ) {
+                    ExtendedFloatingActionButton(
+                        onClick = ::openRecorder,
+                        icon = { Icon(activeRecording!!.type.icon, null) },
+                        text = { Text("Return to ${activeRecording!!.type.label.lowercase()}") },
+                        modifier = Modifier.testTag("active_recording"),
+                    )
+                }
+            },
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    val selected = navigation.backStack.last { it.topLevel }
-                    val tabs =
-                        listOf(
-                            FremDestination.TODAY to Icons.Rounded.WbSunny,
-                            FremDestination.ACTIVITY to Icons.Rounded.BarChart,
-                            FremDestination.BODY to Icons.Rounded.MonitorWeight,
-                            FremDestination.HEALTH to Icons.Rounded.FavoriteBorder,
-                            FremDestination.SETTINGS to Icons.Rounded.Tune,
-                        )
-                    tabs.forEach { (destination, icon) ->
-                        NavigationBarItem(
-                            selected = selected == destination,
-                            onClick = { navigation.navigate(destination) },
-                            icon = { Icon(icon, null) },
-                            label = { Text(destination.label) },
-                            modifier = Modifier.testTag("navigation_${destination.name}"),
-                        )
+                if (!immersive) {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                        val selected = navigation.backStack.last { it.topLevel }
+                        val tabs =
+                            listOf(
+                                FremDestination.TODAY to Icons.Rounded.WbSunny,
+                                FremDestination.ACTIVITY to Icons.Rounded.BarChart,
+                                FremDestination.BODY to Icons.Rounded.MonitorWeight,
+                                FremDestination.HEALTH to Icons.Rounded.FavoriteBorder,
+                                FremDestination.SETTINGS to Icons.Rounded.Tune,
+                            )
+                        tabs.forEach { (destination, icon) ->
+                            NavigationBarItem(
+                                selected = selected == destination,
+                                onClick = { navigation.navigate(destination) },
+                                icon = { Icon(icon, null) },
+                                label = { Text(destination.label) },
+                                modifier = Modifier.testTag("navigation_${destination.name}"),
+                            )
+                        }
                     }
                 }
             },
@@ -318,7 +507,14 @@ fun FremApp(vm: FremViewModel) {
                 navigation = navigation,
                 modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
             ) { destination ->
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    Modifier.fillMaxSize()
+                        .then(
+                            if (immersive) Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+                            else Modifier,
+                        ),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     when (destination) {
                         FremDestination.TODAY ->
                             TodayScreen(
@@ -333,7 +529,87 @@ fun FremApp(vm: FremViewModel) {
                                 data,
                                 onMetric = { metric = it },
                                 onConnect = { connectionSheet = true },
+                                activeRecording = activeRecording,
+                                onRecord = ::openRecorder,
+                                onActivity = ::openActivity,
                             )
+                        FremDestination.RECORDING ->
+                            RecordingScreen(
+                                session = activeRecording,
+                                points = routePoints,
+                                preferences = preferences,
+                                liveDurationMillis =
+                                    recordingLive.durationMillis.takeIf {
+                                        recordingLive.sessionId == activeRecording?.id
+                                    },
+                                speedMetersPerSecond = recordingLive.speedMetersPerSecond,
+                                accuracyMeters = recordingLive.accuracyMeters,
+                                lastFixAt = recordingLive.lastFixAt,
+                                statusMessage = recordingMessage ?: recordingLive.message,
+                                busy = recordingBusy || pendingActivityType != null,
+                                onStart = { requestRecording(it) },
+                                onPause = { vm.recordingAction { vm.recording.pauseAndAwait() } },
+                                onResume = {
+                                    activeRecording?.let {
+                                        requestRecording(it.type, resume = true)
+                                    }
+                                },
+                                onFinish = {
+                                    vm.recordingAction {
+                                        vm.recording.finishAndAwait()?.let { openActivity(it.id) }
+                                    }
+                                },
+                                onDiscard = {
+                                    vm.recordingAction {
+                                        vm.recording.discardAndAwait()
+                                        recordingSessionId = null
+                                        navigation.navigate(FremDestination.ACTIVITY)
+                                    }
+                                },
+                                onBack = navigation::goBack,
+                            )
+                        FremDestination.ACTIVITY_DETAIL -> {
+                            if (selectedActivity != null) {
+                                ActivityDetailScreen(
+                                    session = selectedActivity,
+                                    points = routePoints,
+                                    preferences = preferences,
+                                    onBack = navigation::goBack,
+                                    onEdit = { title, type ->
+                                        vm.recordingAction {
+                                            vm.recording.update(selectedActivity.id, title, type)
+                                        }
+                                    },
+                                    onDelete = {
+                                        vm.recordingAction {
+                                            vm.recording.delete(selectedActivity.id)
+                                            selectedActivityId = null
+                                            navigation.navigate(FremDestination.ACTIVITY)
+                                        }
+                                    },
+                                    onExport = {
+                                        gpxActivityId = selectedActivity.id
+                                        exportGpx.launch(
+                                            "frem-${selectedActivity.type.name.lowercase()}-${java.time.Instant.ofEpochMilli(selectedActivity.start).atZone(java.time.ZoneId.of(selectedActivity.zoneId)).toLocalDate()}.gpx",
+                                        )
+                                    },
+                                )
+                            } else {
+                                Column(
+                                    Modifier.padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    Text(
+                                        "Activity details",
+                                        style = MaterialTheme.typography.headlineLarge,
+                                    )
+                                    Text("This activity is loading or is no longer available.")
+                                    TextButton(onClick = navigation::goBack) {
+                                        Text("Back to activities")
+                                    }
+                                }
+                            }
+                        }
                         FremDestination.BODY ->
                             BodyScreen(
                                 data,
@@ -376,6 +652,14 @@ fun FremApp(vm: FremViewModel) {
                                 onPhone = ::enablePhoneRecording,
                                 onExport = { export.launch("frem-${data.today}.csv") },
                                 onPrivacy = { navigation.navigate(FremDestination.PRIVACY) },
+                                onMapCache = {
+                                    mapCacheDialog = true
+                                    scope.launch {
+                                        mapCacheDescription =
+                                            runCatching { MapCache.sizeDescription(context) }
+                                                .getOrDefault("Map cache unavailable")
+                                    }
+                                },
                                 onWidget = {
                                     val manager = AppWidgetManager.getInstance(context)
                                     if (manager.isRequestPinAppWidgetSupported)
@@ -401,6 +685,99 @@ fun FremApp(vm: FremViewModel) {
                 onRequest = ::request,
                 onHealthSettings = ::openHealthSettings,
                 onPhone = ::enablePhoneRecording,
+            )
+        }
+        if (recordingPermissionHelp || recordingLocationHelp) {
+            val permission = recordingPermissionHelp
+            AlertDialog(
+                onDismissRequest = {
+                    recordingPermissionHelp = false
+                    recordingLocationHelp = false
+                    pendingActivityType = null
+                },
+                icon = { Icon(Icons.Rounded.LocationOn, null) },
+                title = { Text(if (permission) "Allow precise location" else "Turn on location") },
+                text = {
+                    Text(
+                        if (permission)
+                            "Accurate routes need precise location. In Android settings, allow location while using Frem and enable Precise location. Your other health features work without it."
+                        else
+                            "Turn on your phone’s location service to record distance and your route.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            recordingPermissionHelp = false
+                            recordingLocationHelp = false
+                            recordingSettings.launch(
+                                if (permission)
+                                    Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.parse("package:${context.packageName}"),
+                                    )
+                                else Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
+                            )
+                        },
+                    ) {
+                        Text("Open settings")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            recordingPermissionHelp = false
+                            recordingLocationHelp = false
+                            pendingActivityType = null
+                        },
+                    ) {
+                        Text("Not now")
+                    }
+                },
+            )
+        }
+        if (mapCacheDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!clearingMapCache) mapCacheDialog = false },
+                icon = { Icon(Icons.Rounded.Map, null) },
+                title = { Text("Map cache") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(mapCacheDescription)
+                        Text(
+                            "Previously viewed OpenStreetMap tiles are cached on this phone. Clearing them frees storage without deleting recorded activities or routes.",
+                        )
+                        if (clearingMapCache) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !clearingMapCache,
+                        onClick = {
+                            clearingMapCache = true
+                            scope.launch {
+                                try {
+                                    MapCache.clear(context)
+                                    mapCacheDescription = MapCache.sizeDescription(context)
+                                    snackbar.showSnackbar("Map cache cleared.")
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    snackbar.showSnackbar("Couldn’t clear map cache: ${e.message}")
+                                } finally {
+                                    clearingMapCache = false
+                                }
+                            }
+                        },
+                    ) {
+                        Text("Clear map cache")
+                    }
+                },
+                dismissButton = {
+                    TextButton(enabled = !clearingMapCache, onClick = { mapCacheDialog = false }) {
+                        Text("Done")
+                    }
+                },
             )
         }
         metric?.let { selected ->

@@ -40,7 +40,16 @@ fun PrivacyScreen(onDone: () -> Unit, includeBottomInset: Boolean = false) {
                 "With physical activity access, phone recording uses Google Play services to collect steps and estimated distance on your phone. Frem uses these as a fallback when Health Connect has no reading for that metric. Phone recording starts collecting after it is enabled and does not require location access.",
             )
             Text(
-                "Daily reminders are optional and scheduled on your phone. They use your saved entries and goals to skip completed check-ins, and can use permitted background reads for fresh activity data. Notification access is requested only when you enable a reminder or send a preview. You can turn each reminder off or manage notifications in Android settings.",
+                "GPS activity recording is separate from daily phone recording. When you start a walk, hike, run, or ride, Frem requests precise location and records your route, distance, and recording time in its private on-device database. An Android foreground service continues recording with the screen locked. Location collection stops when you pause, finish, or discard the activity. Frem does not automatically detect or record outings.",
+            )
+            Text(
+                "Activity maps use OpenStreetMap tiles loaded directly from tile.openstreetmap.org. Map requests reveal your connection information and the map areas you view to OpenStreetMap’s servers. Frem does not upload your recorded route to a map service. Previously viewed map tiles are cached separately, up to 100 MiB, and can be cleared in Settings without deleting your activities. Uncached map areas require a connection; GPS recording and saving work offline.",
+            )
+            Text(
+                "Your recorded activities are stored locally and are not automatically shared with Health Connect. CSV exports include activity summaries without route coordinates. Export GPX from an activity’s details to explicitly export its precise coordinates and timestamps. Deleting an activity removes its saved route. After an interruption, Frem preserves the last saved progress and asks you to resume or finish; it does not fill in missing locations.",
+            )
+            Text(
+                "Daily reminders are optional and scheduled on your phone. They use your saved entries and goals to skip completed check-ins, and can use permitted background reads for fresh activity data. Notification access is requested when you enable a reminder, send a preview, or start activity recording. You can turn each reminder off or manage notifications in Android settings.",
             )
             Text(
                 "Background access is optional and allows periodic updates while Frem is closed. History access is optional and allows reading older records. You can change or revoke any permission in Health Connect settings. Previously cached history remains on your phone; uninstalling Frem removes its local data. Records already shared to Health Connect are managed separately there.",

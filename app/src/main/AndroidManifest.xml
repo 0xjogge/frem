@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -26,6 +32,8 @@
     <queries><package android:name="com.google.android.apps.healthdata" /></queries>
     <application android:name=".FremApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher"
         android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:theme="@style/Theme.Frem" android:supportsRtl="true" android:enableOnBackInvokedCallback="true">
+        <service android:name=".recording.RecordingService" android:exported="false"
+            android:foregroundServiceType="location" android:stopWithTask="false" />
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>

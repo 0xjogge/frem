@@ -20,15 +20,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dk.frem.app.BuildConfig
 import dk.frem.app.data.*
 import dk.frem.app.domain.Insights
 import dk.frem.app.health.HealthCapabilities
 import dk.frem.app.health.HealthPermissionStatus
 import dk.frem.app.performance.ObserveBenchmarkScroll
+import dk.frem.app.recording.*
 import java.time.*
 
 @Composable
-fun ActivityScreen(data: AppData, onMetric: (Metric) -> Unit, onConnect: () -> Unit) {
+fun ActivityScreen(
+    data: AppData,
+    onMetric: (Metric) -> Unit,
+    onConnect: () -> Unit,
+    activeRecording: ActivitySession? = null,
+    onRecord: () -> Unit = {},
+    onActivity: (String) -> Unit = {},
+) {
     val listState = rememberLazyListState()
     ObserveBenchmarkScroll("activity_list", listState)
     val records =
@@ -57,6 +66,24 @@ fun ActivityScreen(data: AppData, onMetric: (Metric) -> Unit, onConnect: () -> U
             )
             .chunked(2)
     }
+    var showAllActivities by rememberSaveable { mutableStateOf(false) }
+    var activityFilter by rememberSaveable { mutableStateOf("All") }
+    val history =
+        remember(data.recordedActivities, data.workouts) {
+            (data.recordedActivities
+                    .filter { it.state == RecordingState.FINISHED }
+                    .map {
+                        ActivityHistoryEntry("frem:${it.id}", it.start, session = it)
+                    } +
+                    data.workouts.map {
+                        ActivityHistoryEntry("hc:${it.id}", it.start, workout = it)
+                    })
+                .sortedByDescending { it.start }
+        }
+    val filteredHistory =
+        remember(history, activityFilter) {
+            history.filter { activityFilter == "All" || it.group == activityFilter }
+        }
     LazyColumn(
         state = listState,
         modifier = Modifier.testTag("activity_list"),
@@ -64,7 +91,97 @@ fun ActivityScreen(data: AppData, onMetric: (Metric) -> Unit, onConnect: () -> U
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         item(key = "title", contentType = "title") {
-            Text("Every step counts.", style = MaterialTheme.typography.headlineLarge)
+            Text("Make every outing count.", style = MaterialTheme.typography.headlineLarge)
+        }
+        item(key = "record-activity", contentType = "record") {
+            RecordActivityHero(activeRecording, data.preferences, onRecord, onRecord)
+        }
+        item(key = "activities-title", contentType = "section") {
+            SectionTitle("Your activities", "Your recordings and Health Connect sessions")
+        }
+        if (history.isEmpty()) {
+            item(key = "empty-activities", contentType = "info") {
+                InfoCard(
+                    "Your next adventure starts here",
+                    "Walks, trail hikes, runs, and rides you record appear here. Connect Health Connect to include sessions from a watch or another app.",
+                    Icons.Rounded.Explore,
+                    "Connect other activities",
+                    onConnect,
+                )
+            }
+        } else {
+            item(key = "activity-filters", contentType = "filters") {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("All", "Walking", "Hiking", "Running", "Cycling", "Other").forEach {
+                        filter ->
+                        FilterChip(
+                            selected = activityFilter == filter,
+                            onClick = { activityFilter = filter },
+                            label = { Text(filter) },
+                            modifier = Modifier.testTag("activity_filter_$filter"),
+                        )
+                    }
+                }
+            }
+            if (filteredHistory.isEmpty())
+                item(key = "filtered-empty", contentType = "info") {
+                    Text(
+                        "No ${activityFilter.lowercase()} activities yet.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            items(
+                if (showAllActivities) filteredHistory else filteredHistory.take(5),
+                key = { it.id },
+                contentType = { if (it.session != null) "recorded-activity" else "workout" },
+            ) { entry ->
+                val session = entry.session
+                if (session != null)
+                    RecordedActivityCard(session, data.preferences) { onActivity(session.id) }
+                else
+                    entry.workout?.let { workout ->
+                        Card(
+                            colors =
+                                CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(
+                                Modifier.padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(workout.title, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${workout.minutes} min · ${dateText(Instant.ofEpochMilli(workout.start).atZone(ZoneId.systemDefault()), "d MMM, HH:mm")}",
+                                )
+                                Text(
+                                    "Health Connect · ${workout.source}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+            }
+            if (filteredHistory.size > 5)
+                item(key = "all-activities", contentType = "button") {
+                    OutlinedButton(
+                        onClick = { showAllActivities = !showAllActivities },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (showAllActivities) "Show recent activities"
+                            else "Show all ${filteredHistory.size} activities",
+                        )
+                    }
+                }
+        }
+        item(key = "movement-title", contentType = "section") {
+            SectionTitle("Daily movement", "Steps and all-day health readings")
         }
         item(key = "week", contentType = "chart") {
             Card(
@@ -129,62 +246,36 @@ fun ActivityScreen(data: AppData, onMetric: (Metric) -> Unit, onConnect: () -> U
                 }
             }
         }
-        item(key = "workouts", contentType = "section") {
-            SectionTitle("Workouts", "Sessions shared with Health Connect")
-        }
-        if (data.workouts.isEmpty())
-            item(key = "connect-workouts", contentType = "info") {
-                InfoCard(
-                    "Make room for movement",
-                    "Recorded walks, runs, gym sessions, and other workouts will appear when an app or watch shares them with Health Connect.",
-                    Icons.Rounded.FitnessCenter,
-                    "Connect workouts",
-                    onConnect,
-                )
-            }
-        else {
-            val cutoff =
-                data.today
-                    .minusDays(6)
-                    .atStartOfDay(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
-            item(key = "workout-summary", contentType = "info") {
-                InfoCard(
-                    "Your week in workouts",
-                    "${data.workouts.count { it.start >= cutoff }} sessions · ${data.workouts.filter { it.start >= cutoff }.sumOf { it.minutes }} minutes recorded.",
-                    Icons.Rounded.FitnessCenter,
-                )
-            }
-            items(data.workouts, key = { "workout-${it.id}" }, contentType = { "workout" }) {
-                workout ->
-                Card(
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(workout.title, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            remember(workout) {
-                                "${workout.minutes} min · ${dateText(Instant.ofEpochMilli(workout.start).atZone(ZoneId.systemDefault()), "d MMM, HH:mm")}"
-                            },
-                        )
-                        Text(
-                            workout.source,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+    }
+}
+
+private data class ActivityHistoryEntry(
+    val id: String,
+    val start: Long,
+    val session: ActivitySession? = null,
+    val workout: Workout? = null,
+) {
+    val group: String
+        get() =
+            session?.type?.let {
+                when {
+                    it.cycling -> "Cycling"
+                    it == ActivityType.HIKING -> "Hiking"
+                    it == ActivityType.WALKING -> "Walking"
+                    else -> "Running"
                 }
             }
-        }
-    }
+                ?: when (workout?.type) {
+                    androidx.health.connect.client.records.ExerciseSessionRecord
+                        .EXERCISE_TYPE_WALKING -> "Walking"
+                    androidx.health.connect.client.records.ExerciseSessionRecord
+                        .EXERCISE_TYPE_HIKING -> "Hiking"
+                    androidx.health.connect.client.records.ExerciseSessionRecord
+                        .EXERCISE_TYPE_RUNNING -> "Running"
+                    androidx.health.connect.client.records.ExerciseSessionRecord
+                        .EXERCISE_TYPE_BIKING -> "Cycling"
+                    else -> "Other"
+                }
 }
 
 @Composable
@@ -720,6 +811,7 @@ fun SettingsScreen(
     onExport: () -> Unit,
     onPrivacy: () -> Unit,
     onWidget: () -> Unit,
+    onMapCache: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     ObserveBenchmarkScroll("settings_list", listState)
@@ -859,6 +951,15 @@ fun SettingsScreen(
         item(key = "data", contentType = "section") {
             SettingsSectionTitle("Your data & shortcuts")
         }
+        item(key = "map-cache", contentType = "action") {
+            SettingsAction(
+                "Map cache",
+                "OpenStreetMap tiles · up to 100 MiB · clear saved map tiles",
+                Icons.Rounded.Map,
+            ) {
+                onMapCache()
+            }
+        }
         item(key = "widget", contentType = "action") {
             SettingsAction(
                 "Add step widget",
@@ -871,7 +972,7 @@ fun SettingsScreen(
         item(key = "export", contentType = "action") {
             SettingsAction(
                 "Export CSV",
-                "Entries, daily summaries, workouts, and sleep",
+                "Entries, daily summaries, activities, and sleep",
                 Icons.Rounded.FileDownload,
             ) {
                 onExport()
@@ -888,7 +989,7 @@ fun SettingsScreen(
         }
         item(key = "version", contentType = "footer") {
             Text(
-                "Frem 0.1 · Forward, one day at a time.",
+                "Frem ${BuildConfig.VERSION_NAME} · Forward, one day at a time.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )

@@ -7,6 +7,7 @@ import dk.frem.app.FremApplication
 import dk.frem.app.data.*
 import dk.frem.app.health.HealthCapabilities
 import dk.frem.app.health.SyncWorker
+import dk.frem.app.recording.*
 import dk.frem.app.reminders.ReminderNotifications
 import dk.frem.app.reminders.ReminderScheduler
 import dk.frem.app.widget.StepsWidget
@@ -18,6 +19,19 @@ import kotlinx.coroutines.launch
 
 class FremViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as FremApplication).repository
+    val recording = (application as FremApplication).recording
+    val recordedActivities =
+        recording.sessions.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList(),
+        )
+    val activeRecording =
+        recording.active.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val recordingLive = recording.live
+    val recordingBusy = MutableStateFlow(false)
+    val recordingDestination = MutableStateFlow(false)
+    val recordingMessage = MutableStateFlow<String?>(null)
     val entries =
         repository.dao
             .entries()
@@ -105,6 +119,29 @@ class FremViewModel(application: Application) : AndroidViewModel(application) {
     fun openReminder(kind: String?) {
         reminderDestination.value = kind?.let {
             runCatching { ReminderKind.valueOf(it) }.getOrNull()
+        }
+    }
+
+    fun openRecording(open: Boolean) {
+        if (open) recordingDestination.value = true
+    }
+
+    fun recordingAction(block: suspend () -> Unit) {
+        if (recordingBusy.value) return
+        recordingBusy.value = true
+        viewModelScope.launch {
+            try {
+                recordingMessage.value = null
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val detail = e.message ?: "Couldn’t update the activity. Please try again."
+                recordingMessage.value = detail
+                message.value = detail
+            } finally {
+                recordingBusy.value = false
+            }
         }
     }
 

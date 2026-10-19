@@ -19,6 +19,7 @@ For update checks, add `https://github.com/0xjogge/frem` to [Obtainium](https://
 ## Features
 
 - Steps, distance, activity history, daily goals, and streaks.
+- GPS walking, hiking, running, and cycling with live OpenStreetMap maps, screen-off recording, pause/resume, and GPX export.
 - Weight, body measurements, hydration, and reminders.
 - Sleep, heart rate, and workout imports through Health Connect.
 - Light/dark themes, metric/imperial units, and CSV export.
@@ -31,6 +32,7 @@ For update checks, add `https://github.com/0xjogge/frem` to [Obtainium](https://
 ## Documentation
 
 - [Development](docs/development.md) — build, run, and test.
+- [Activity recording](docs/activity-recording.md) — record outings, understand metrics, and export routes.
 - [Releasing](RELEASING.md) — versioning and publishing.
 - [Changelog](https://github.com/0xjogge/frem/releases).
 

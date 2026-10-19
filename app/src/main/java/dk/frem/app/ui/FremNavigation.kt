@@ -19,10 +19,12 @@ enum class FremDestination(val label: String) {
     BODY("Body"),
     HEALTH("Health"),
     SETTINGS("Settings"),
-    PRIVACY("Privacy & permissions");
+    PRIVACY("Privacy & permissions"),
+    RECORDING("Record activity"),
+    ACTIVITY_DETAIL("Activity details");
 
     val topLevel: Boolean
-        get() = this != PRIVACY
+        get() = this in setOf(TODAY, ACTIVITY, BODY, HEALTH, SETTINGS)
 }
 
 class FremNavigation(private val destinations: SnapshotStateList<FremDestination>) {

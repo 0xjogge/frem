@@ -1,5 +1,7 @@
 package dk.frem.app.data
 
+import dk.frem.app.recording.ActivitySession
+import dk.frem.app.recording.RecordingState
 import java.time.Instant
 import java.time.ZoneId
 
@@ -9,6 +11,7 @@ object CsvExport {
         days: List<DaySummary>,
         workouts: List<Workout>,
         nights: List<SleepNight>,
+        recordedActivities: List<ActivitySession> = emptyList(),
     ): String {
         fun escape(value: Any?): String =
             value?.toString()?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
@@ -102,6 +105,44 @@ object CsvExport {
                     "deep=${it.deepMinutes};rem=${it.remMinutes};light=${it.lightMinutes};awake=${it.awakeMinutes}",
                 )
         }
+        recordedActivities
+            .filter { it.state == RecordingState.FINISHED }
+            .forEach { session ->
+                val start = Instant.ofEpochMilli(session.start)
+                val end = session.end?.let(Instant::ofEpochMilli)
+                val date = start.atZone(ZoneId.of(session.zoneId)).toLocalDate()
+                val detail =
+                    "id=${session.id};title=${session.title};type=${session.type.name};zone=${session.zoneId}"
+                val values =
+                    listOf(
+                        Triple("activity_distance", session.distanceMeters, "m"),
+                        Triple("activity_recording_seconds", session.durationMillis / 1_000.0, "s"),
+                        Triple(
+                            "activity_elapsed_seconds",
+                            session.end
+                                ?.takeIf { it >= session.start }
+                                ?.let {
+                                    (it - session.start) / 1_000.0
+                                },
+                            "s",
+                        ),
+                    )
+                values
+                    .filter { it.second != null }
+                    .forEach { (type, value, unit) ->
+                        rows +=
+                            listOf(
+                                type,
+                                date,
+                                start,
+                                end,
+                                value,
+                                unit,
+                                "Recorded with Frem",
+                                detail,
+                            )
+                    }
+            }
         return rows.joinToString("\r\n", postfix = "\r\n") { row ->
             row.joinToString(",", transform = ::escape)
         }

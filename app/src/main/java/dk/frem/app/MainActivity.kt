@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (BuildConfig.FRAME_DIAGNOSTICS) FrameDiagnostics.attach(window)
         viewModel.openReminder(intent.getStringExtra("reminder_kind"))
+        viewModel.openRecording(intent.getBooleanExtra("recording", false))
         setContent { FremApp(viewModel) }
     }
 
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         viewModel.openReminder(intent.getStringExtra("reminder_kind"))
+        viewModel.openRecording(intent.getBooleanExtra("recording", false))
     }
 
     override fun onDestroy() {

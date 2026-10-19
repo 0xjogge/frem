@@ -1,6 +1,9 @@
 package dk.frem.app.data
 
 import androidx.room.*
+import dk.frem.app.recording.ActivitySession
+import dk.frem.app.recording.RecordingDao
+import dk.frem.app.recording.TrackPoint
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -59,14 +62,73 @@ interface FremDao {
 }
 
 @Database(
-    entities = [LogEntry::class, DaySummary::class, Workout::class, SleepNight::class],
-    version = 3,
+    entities =
+        [
+            LogEntry::class,
+            DaySummary::class,
+            Workout::class,
+            SleepNight::class,
+            ActivitySession::class,
+            TrackPoint::class,
+        ],
+    version = 4,
     exportSchema = true,
 )
 abstract class FremDatabase : RoomDatabase() {
     abstract fun dao(): FremDao
 
+    abstract fun recordingDao(): RecordingDao
+
     companion object {
+        val MIGRATION_3_4 =
+            object : androidx.room.migration.Migration(3, 4) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS activity_sessions (
+                            id TEXT NOT NULL PRIMARY KEY,
+                            title TEXT NOT NULL,
+                            type TEXT NOT NULL,
+                            start INTEGER NOT NULL,
+                            end INTEGER,
+                            zoneId TEXT NOT NULL,
+                            state TEXT NOT NULL,
+                            distanceMeters REAL NOT NULL,
+                            durationMillis INTEGER NOT NULL,
+                            ascentMeters REAL,
+                            lastCheckpoint INTEGER NOT NULL,
+                            activeSlot INTEGER
+                        )
+                        """
+                            .trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS index_activity_sessions_activeSlot " +
+                            "ON activity_sessions (activeSlot)",
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS track_points (
+                            sessionId TEXT NOT NULL,
+                            sequence INTEGER NOT NULL,
+                            segment INTEGER NOT NULL,
+                            recordedAt INTEGER NOT NULL,
+                            elapsedRealtimeNanos INTEGER NOT NULL,
+                            latitude REAL NOT NULL,
+                            longitude REAL NOT NULL,
+                            accuracyMeters REAL NOT NULL,
+                            altitudeMeters REAL,
+                            speedMetersPerSecond REAL,
+                            PRIMARY KEY (sessionId, sequence),
+                            FOREIGN KEY (sessionId) REFERENCES activity_sessions (id)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """
+                            .trimIndent(),
+                    )
+                }
+            }
+
         val MIGRATION_2_3 =
             object : androidx.room.migration.Migration(2, 3) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

@@ -132,7 +132,7 @@ class FremDeviceTest {
 
     @Test
     fun migrationPreservesWeightAndActivityHistory() = runBlocking {
-        for (fromVersion in 1..2) verifyHistoryMigration(fromVersion)
+        for (fromVersion in 1..3) verifyHistoryMigration(fromVersion)
     }
 
     private suspend fun verifyHistoryMigration(fromVersion: Int) {
@@ -163,12 +163,19 @@ class FremDeviceTest {
             execSQL(
                 "INSERT INTO days (date,steps,distance,source,updatedAt) VALUES ('2026-10-14',1234,850.5,'Health Connect',0)",
             )
+            execSQL(
+                "INSERT INTO workouts (id,title,type,start,end,source) VALUES ('migration-workout','Evening walk',79,1000,1801000,'Health Connect')",
+            )
             version = fromVersion
             close()
         }
         val migrated =
             Room.databaseBuilder(context, FremDatabase::class.java, name)
-                .addMigrations(FremDatabase.MIGRATION_1_2, FremDatabase.MIGRATION_2_3)
+                .addMigrations(
+                    FremDatabase.MIGRATION_1_2,
+                    FremDatabase.MIGRATION_2_3,
+                    FremDatabase.MIGRATION_3_4,
+                )
                 .build()
         try {
             assertEquals(81.2, migrated.dao().entry("migration-weight")!!.value, .001)
@@ -179,6 +186,15 @@ class FremDeviceTest {
             assertNull(day.distanceSource)
             migrated.dao().putDays(listOf(day.copy(distanceSource = "Phone recording")))
             assertEquals("Phone recording", migrated.dao().day(day.date)!!.distanceSource)
+            assertEquals(
+                Workout("migration-workout", "Evening walk", 79, 1000, 1801000, "Health Connect"),
+                migrated.dao().workouts().first().single(),
+            )
+            val recording = migrated.recordingDao()
+            assertTrue(recording.sessions().first().isEmpty())
+            assertNull(recording.activeSession())
+            assertTrue(recording.points("migration-workout").first().isEmpty())
+            assertTrue(recording.getPoints("migration-workout").isEmpty())
         } finally {
             migrated.close()
             context.deleteDatabase(name)

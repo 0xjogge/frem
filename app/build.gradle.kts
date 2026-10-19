@@ -4,7 +4,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val fremVersion = providers.gradleProperty("fremVersion").orElse("0.1").get()
+val fremVersion = providers.gradleProperty("fremVersion").orElse("0.3").get()
 
 require(Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matches(fremVersion)) {
     "Frem versions use <feature>.<patch>, for example 0.1"
@@ -103,6 +103,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.1")
     implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
     implementation("com.google.android.gms:play-services-fitness:21.3.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
