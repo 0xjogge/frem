@@ -4,7 +4,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val fremVersion = providers.gradleProperty("fremVersion").orElse("0.3").get()
+val fremVersion = providers.gradleProperty("fremVersion").orElse("0.4").get()
+val fremSplitApks =
+    providers.gradleProperty("fremSplitApks").map(String::toBooleanStrict).orElse(false).get()
 
 require(Regex("(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)").matches(fremVersion)) {
     "Frem versions use <feature>.<patch>, for example 0.1"
@@ -34,6 +36,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    splits {
+        abi {
+            isEnable = fremSplitApks
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = true
+        }
     }
     if (releaseKeystorePath != null) {
         signingConfigs.create("release") {

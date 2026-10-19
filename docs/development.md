@@ -14,6 +14,15 @@ For a connected phone, enable USB debugging and run `./gradlew :app:installDebug
 
 Without Nix, install JDK 21, Android SDK 37.0, build tools 36.0.0, Node.js, and Python 3.
 
+Build the universal and all four architecture-specific release APKs with:
+
+```sh
+./gradlew :app:assembleRelease -PfremSplitApks=true
+python3 scripts/package-release.py --check-build
+```
+
+The APKs are listed in `app/build/outputs/apk/release/output-metadata.json`. Normal builds keep ABI splitting disabled, including the debug APK used below. For signed installers and release asset names, see [Releasing](../RELEASING.md).
+
 ## Emulator
 
 ```sh

@@ -43,7 +43,7 @@ jobs:
     uses: ./.github/workflows/verify.yml
 
   publish:
-    name: Sign APK and publish release
+    name: Sign five APKs and publish release
     needs: [prepare, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -93,15 +93,15 @@ jobs:
           path.write_bytes(base64.b64decode(key, validate=True))
           path.chmod(0o600)
           PY
-      - name: Build signed optimized APK
+      - name: Build signed optimized universal and architecture APKs
         env:
           FREM_KEYSTORE_PATH: ${{ runner.temp }}/frem-release.p12
           FREM_KEYSTORE_PASSWORD: ${{ secrets.FREM_KEYSTORE_PASSWORD }}
           FREM_KEY_ALIAS: ${{ secrets.FREM_KEY_ALIAS }}
           FREM_KEY_PASSWORD: ${{ secrets.FREM_KEY_PASSWORD }}
-        run: ./gradlew --stacktrace :app:assembleRelease -PfremVersion="$RELEASE_VERSION"
-      - name: Verify certificate, package, and version; stage assets
-        run: python3 scripts/package-release.py "$RELEASE_TAG"
+        run: ./gradlew --stacktrace :app:assembleRelease -PfremVersion="$RELEASE_VERSION" -PfremSplitApks=true
+      - name: Verify all five APKs and add measured download guidance
+        run: python3 scripts/package-release.py "$RELEASE_TAG" --notes-file build/release-notes.md
       - name: Publish with assets attached before making the release visible
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,7 +111,7 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file build/release-notes.md
           fi
-          gh release upload "$RELEASE_TAG" "build/release/frem-$RELEASE_TAG.apk" --clobber
+          gh release upload "$RELEASE_TAG" build/release/*.apk --clobber
           gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file build/release-notes.md --draft=false --prerelease=false --latest
       - name: Remove signing key
         if: always()

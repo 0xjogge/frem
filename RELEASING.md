@@ -20,13 +20,25 @@ Start from the current `main` with passing CI:
 ```sh
 git switch main
 git pull --ff-only
-git tag -a 0.1-release -m "Release 0.1"
-git push origin 0.1-release
+git tag -a 0.4-release -m "Release 0.4"
+git push origin 0.4-release
 ```
 
 Follow the [Release workflow](https://github.com/0xjogge/frem/actions/workflows/release.yml). It validates the version and tag ancestry, runs the full verification workflow, builds with R8/resource shrinking and the permanent release key, and checks the APK's certificate, package ID, version, and non-debuggable status before publishing.
 
-The release is staged as a draft with its APK attached, then published as a stable release marked latest. For `0.1-release`, the sole release attachment is **`frem-0.1-release.apk`**, a universal APK for supported device architectures. The grouped changelog appears in the release description.
+Each release from 0.4 includes five standalone APKs. All five are attached to a draft before it is published as a stable release marked latest:
+
+| APK for 0.4                        | Architecture                             |
+| ---------------------------------- | ---------------------------------------- |
+| `frem-0.4-release.apk`             | Universal: ARM64, ARM32, x86-64, and x86 |
+| `frem-0.4-release-arm64-v8a.apk`   | ARM64, recommended for most phones       |
+| `frem-0.4-release-armeabi-v7a.apk` | 32-bit ARM                               |
+| `frem-0.4-release-x86_64.apk`      | 64-bit Intel                             |
+| `frem-0.4-release-x86.apk`         | 32-bit Intel                             |
+
+The universal filename retains the existing `frem-<version>-release.apk` pattern. All variants have the same package ID, version name, version code, and permanent signing certificate. Version codes have no architecture-specific offsets, so future updates can switch between compatible architecture and universal builds.
+
+The release notes contain the grouped changelog and a download table with actual APK sizes. The packaging helper discovers the active files through Gradle's `output-metadata.json`, verifies every APK's identity and signing certificate, inspects each native library's ELF architecture, and checks that architecture builds contain the same native libraries as the universal build. Only the five verified APKs are staged for upload.
 
 If a run fails, fix the cause and use **Re-run failed jobs**. The workflow can resume an unpublished draft. A published release is immutable in the release workflow; use the next patch version for a new APK.
 
@@ -87,9 +99,13 @@ The setup helper reuses existing credentials and verifies the pinned fingerprint
 
 ```sh
 nix develop --command python3 scripts/signing.py run \
-  ./gradlew :app:assembleRelease -PfremVersion=0.1
-nix develop --command python3 scripts/package-release.py 0.1-release
+  ./gradlew :app:assembleRelease -PfremVersion=0.4 -PfremSplitApks=true
+nix develop --command python3 scripts/package-release.py 0.4-release
 ```
+
+The signed installers are staged under `build/release/`. Pass `--notes-file build/release-notes.md` to the packaging helper to append the measured download table to generated release notes.
+
+`fremSplitApks` is an opt-in build property. Normal development builds retain their usual single-APK filenames. CI separately builds the five release outputs and runs `python3 scripts/package-release.py --check-build` to inspect their identities and native contents without signing secrets. This check mode does not stage or publish release assets; publishing always requires the pinned release certificate.
 
 The `debug`, `benchmark`, `profile`, and `optimized` variants use the development signing identity. Published release APKs use the permanent release key. Android updates require matching signing identities, so moving an existing development installation to the release APK requires migrating to the release installation.
 
@@ -99,6 +115,16 @@ After the repository is public and a release is published:
 
 1. Add `https://github.com/0xjogge/frem` as a GitHub source in Obtainium.
 2. Keep pre-releases disabled. Tags ending in `-release` are explicitly published as stable releases.
-3. The single APK is selected automatically; an optional APK filter is `^frem-[0-9]+\.[0-9]+-release\.apk$`.
+3. Set **Filter APKs by Regular Expression** to one of the following filters. This selects exactly one installer and allows automatic updates without an APK-selection prompt.
+
+| Build        | APK filter                                       |
+| ------------ | ------------------------------------------------ |
+| Universal    | `^frem-[0-9]+\.[0-9]+-release\.apk$`             |
+| ARM64        | `^frem-[0-9]+\.[0-9]+-release-arm64-v8a\.apk$`   |
+| ARM32        | `^frem-[0-9]+\.[0-9]+-release-armeabi-v7a\.apk$` |
+| Intel 64-bit | `^frem-[0-9]+\.[0-9]+-release-x86_64\.apk$`      |
+| Intel 32-bit | `^frem-[0-9]+\.[0-9]+-release-x86\.apk$`         |
+
+Obtainium also offers CPU-architecture filtering based on filenames. An explicit filter makes the choice deterministic when both universal and architecture-specific APKs are available. Existing universal filters continue to work. To get smaller downloads on a compatible device, change the filter to its architecture; the next version installs over the existing app and preserves its data.
 
 The package ID stays `dk.frem.app`, the signing certificate stays constant, and Android version codes increase. Obtainium can read the GitHub release notes and install subsequent versions as updates.

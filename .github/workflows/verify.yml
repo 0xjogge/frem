@@ -44,6 +44,10 @@ jobs:
           ./gradlew --stacktrace --continue
           :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest
           spotlessCheck :app:lintDebug :app:testDebugUnitTest
+      - name: Build and inspect universal and architecture-specific APKs
+        run: |
+          ./gradlew --stacktrace :app:assembleRelease -PfremSplitApks=true
+          python3 scripts/package-release.py --check-build
       - name: Upload emulator test APKs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

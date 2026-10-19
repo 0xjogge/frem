@@ -14,7 +14,19 @@
 
 **Android 10 or newer.** Download the APK from [GitHub Releases](https://github.com/0xjogge/frem/releases/latest), then open it to install.
 
-For update checks, add `https://github.com/0xjogge/frem` to [Obtainium](https://obtainium.imranr.dev/).
+Choose one complete installer:
+
+| Build                   | Filename                                 | Device                                             |
+| ----------------------- | ---------------------------------------- | -------------------------------------------------- |
+| **ARM64 (recommended)** | `frem-<version>-release-arm64-v8a.apk`   | Most modern Android phones                         |
+| ARM32                   | `frem-<version>-release-armeabi-v7a.apk` | Older 32-bit ARM devices                           |
+| Intel 64-bit            | `frem-<version>-release-x86_64.apk`      | Intel devices and emulators                        |
+| Intel 32-bit            | `frem-<version>-release-x86.apk`         | 32-bit Intel devices                               |
+| **Universal**           | `frem-<version>-release.apk`             | All supported architectures; choose this if unsure |
+
+Architecture-specific APKs are smaller because they include native libraries for just that CPU. All builds use the same signing key and support in-place updates with your existing data.
+
+For update checks, add `https://github.com/0xjogge/frem` to [Obtainium](https://obtainium.imranr.dev/). Use the [APK filters](RELEASING.md#obtainium) to select your architecture or the universal build automatically.
 
 ## Features
 
