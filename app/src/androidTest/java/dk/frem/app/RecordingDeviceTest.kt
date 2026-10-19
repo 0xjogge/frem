@@ -18,9 +18,8 @@ import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -179,19 +178,7 @@ class RecordingDeviceTest {
 
             click("activity_detail_back")
             awaitTag("activity_list")
-            awaitTag("recorded_activity_$id", scroll = true)
-            // A partly visible card exposes only its clipped text to Android accessibility.
-            // History has no active native map, so scroll the whole card before inspecting it.
-            compose.onNodeWithTag("recorded_activity_$id").performScrollTo()
-            waitFor {
-                findTag("recorded_activity_$id")?.let {
-                    it.containsText(title) && it.containsText("Cycling")
-                } == true
-            }
-            val card = findTag("recorded_activity_$id")!!
-            assertTrue("History must show the edited title", card.containsText(title))
-            assertTrue("History must show the edited sport", card.containsText("Cycling"))
-            assertFalse(card.containsText("Hiking"))
+            assertEditedActivityInHistory(id, title)
             click("recorded_activity_$id")
             awaitTag("activity_detail")
             click("activity_delete", scroll = true)
@@ -678,6 +665,48 @@ class RecordingDeviceTest {
         return stored { dao.getPoints(id) }.also { assertEquals(count, it.size) }
     }
 
+    private fun assertEditedActivityInHistory(id: String, title: String) {
+        val tag = "recorded_activity_$id"
+        try {
+            // History has no active native map. Use one synchronized Compose tree for scrolling
+            // and text checks: an accessibility scroll can expose a card mid-animation, then
+            // dispose that lazy item before performScrollTo() queries it in Compose.
+            compose.onNodeWithTag("activity_list").performScrollToNode(hasTestTag(tag))
+            val card = compose.onNodeWithTag(tag).performScrollTo()
+            waitFor {
+                compose
+                    .onAllNodes(
+                        hasTestTag(tag) and
+                            hasText(title, substring = true) and
+                            hasText("Cycling", substring = true),
+                    )
+                    .fetchSemanticsNodes()
+                    .size == 1
+            }
+            card
+                .assertIsDisplayed()
+                .assertTextContains(title, substring = true)
+                .assertTextContains("Cycling", substring = true)
+                .assert(hasText("Hiking", substring = true).not())
+        } catch (failure: Throwable) {
+            // Capture before withCapture deletes the test session. Include the current Compose
+            // tree and durable test row in the failure itself, so CI log-only artifacts suffice.
+            runCatching { captureSyntheticScreen("recording-device-history-failure") }
+                .exceptionOrNull()
+                ?.let(failure::addSuppressed)
+            val tree = runCatching {
+                compose.onRoot(useUnmergedTree = true).printToString()
+            }
+                .getOrElse { "Compose semantics unavailable: $it" }
+            val saved = runCatching { stored { dao.session(id) } }
+            throw AssertionError(
+                "Expected history card $tag with title '$title' and Cycling, without Hiking.\n" +
+                    "Saved test session: $saved\nCompose semantics:\n$tree",
+                failure,
+            )
+        }
+    }
+
     private fun awaitMap(points: Int, segments: Int) {
         awaitTag("activity_map")
         waitFor {
@@ -847,10 +876,6 @@ class RecordingDeviceTest {
         )
     }
 
-    private fun AccessibilityNodeInfo.containsText(expected: String): Boolean =
-        text?.contains(expected) == true ||
-            (0 until childCount).any { getChild(it)?.containsText(expected) == true }
-
     private fun grant(permission: String) {
         shell("pm grant ${app.packageName} $permission")
         assertEquals(
@@ -895,7 +920,7 @@ class RecordingDeviceTest {
     }
 
     private fun captureSyntheticScreen(name: String) {
-        // Called only on immersive recording/detail, containing this test's synthetic route.
+        // Synthetic recording/detail and failure diagnostics stay in app-internal cache.
         val bitmap = automation.takeScreenshot()
         assertNotNull("UiAutomation screenshot unavailable", bitmap)
         try {
