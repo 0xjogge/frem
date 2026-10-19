@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import androidx.room.withTransaction
 import dk.frem.app.data.FremDatabase
+import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -27,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class CaptureRequest(
     val sessionId: String,
@@ -54,6 +56,14 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     private var generation = 0L
     private var host: String? = null
     private var lastCheckpointNanos = 0L
+    private var sensorSource: RecordingSensorSource? = null
+    private var stepProcessor: StepMetricsProcessor? = null
+    private val metricDays = mutableMapOf<String, ActivityDayMetrics>()
+    private var metricsDirty = false
+    private var lastMetricCheckpointNanos = 0L
+    private var sensorWallOrigin = 0L
+    private var sensorElapsedOrigin = 0L
+    val nativeMetrics: Flow<List<ActivityDayMetrics>> = dao.metricDays()
 
     val sessions: Flow<List<ActivitySession>> = flow {
         awaitReady()
@@ -68,6 +78,97 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     internal val serviceSession: StateFlow<ActivitySession?> = mutableServiceSession.asStateFlow()
 
     @Volatile private var sourceFactory: (() -> RecordingLocationSource)? = null
+    @Volatile private var sensorSourceFactory: (() -> RecordingSensorSource)? = null
+
+    suspend fun setSensorSourceFactoryForTesting(factory: (() -> RecordingSensorSource)?) {
+        enqueue {
+            check(mutableCapture.value == null) { "Pause recording before replacing sensors." }
+            sensorSourceFactory = factory
+        }
+            .await()
+    }
+
+    internal fun newSensorSource(request: CaptureRequest): RecordingSensorSource =
+        sensorSourceFactory?.invoke() ?: AndroidRecordingSensorSource(context, request.type)
+
+    internal suspend fun registerSensorSource(
+        request: CaptureRequest,
+        candidate: RecordingSensorSource,
+    ): Boolean = lock.withLock {
+        if (mutableCapture.value != request || stoppingCapture == request) {
+            candidate.close()
+            false
+        } else {
+            sensorSource?.close()
+            sensorSource = candidate
+            true
+        }
+    }
+
+    internal suspend fun acceptSensor(request: CaptureRequest, event: RecordingSensorEvent) {
+        lock.withLock {
+            if (mutableCapture.value != request) return
+            when (event) {
+                is RecordingSensorEvent.Step -> {
+                    val delta =
+                        stepProcessor?.accept(
+                            event.elapsedNanos,
+                            SystemClock.elapsedRealtimeNanos(),
+                        ) ?: return
+                    val day = metricDay(event.elapsedNanos)
+                    metricDays[day.date] = day.copy(steps = (day.steps ?: 0) + 1)
+                    if (delta.movingMillis > 0) {
+                        val start = wallTime(delta.intervalStartNanos!!)
+                        val end = wallTime(delta.elapsedNanos)
+                        splitMetricInterval(start, end, ZoneId.of(current!!.zoneId)) {
+                            date,
+                            duration ->
+                            val row =
+                                metricDays[date] ?: ActivityDayMetrics(request.sessionId, date)
+                            val fraction = duration.toDouble() / (end - start)
+                            metricDays[date] =
+                                row.copy(
+                                    cadenceSteps = row.cadenceSteps + fraction,
+                                    cadenceMillis = row.cadenceMillis + duration,
+                                    moderateMillis =
+                                        row.moderateMillis +
+                                            (delta.moderateMillis * fraction).toLong(),
+                                    vigorousMillis =
+                                        row.vigorousMillis +
+                                            (delta.vigorousMillis * fraction).toLong(),
+                                )
+                        }
+                    }
+                    metricsDirty = true
+                    mutableLive.value =
+                        mutableLive.value.copy(
+                            cadence = stepProcessor?.cadence(SystemClock.elapsedRealtimeNanos()),
+                        )
+                }
+                is RecordingSensorEvent.Barrier -> event.completion.complete(Unit)
+            }
+        }
+    }
+
+    private fun wallTime(elapsed: Long): Long =
+        sensorWallOrigin + (elapsed - sensorElapsedOrigin) / 1_000_000
+
+    private fun metricDay(elapsed: Long): ActivityDayMetrics {
+        val session = current!!
+        val date =
+            Instant.ofEpochMilli(wallTime(elapsed))
+                .atZone(ZoneId.of(session.zoneId))
+                .toLocalDate()
+                .toString()
+        return metricDays[date] ?: ActivityDayMetrics(session.id, date)
+    }
+
+    private suspend fun saveMetricsLocked() {
+        if (!metricsDirty) return
+        dao.putMetricDays(metricDays.values.toList())
+        metricsDirty = false
+        lastMetricCheckpointNanos = SystemClock.elapsedRealtimeNanos()
+    }
 
     private val ready = scope.async {
         lock.withLock {
@@ -278,7 +379,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                 processorLastFixNanos = fix.elapsedRealtimeNanos
                 lastCheckpointNanos = SystemClock.elapsedRealtimeNanos()
                 mutableLive.value =
-                    RecordingLiveState(
+                    mutableLive.value.copy(
                         sessionId = snapshot.id,
                         accuracyMeters = fix.accuracyMeters,
                         speedMetersPerSecond = update.speedMetersPerSecond,
@@ -296,6 +397,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
             val session = current ?: return
             if (session.state != RecordingState.RECORDING) return
             val now = SystemClock.elapsedRealtimeNanos()
+            if (now - lastMetricCheckpointNanos >= CHECKPOINT_INTERVAL_NANOS) saveMetricsLocked()
             val duration = timeline?.durationMillis(now) ?: session.durationMillis
             val stale =
                 mutableLive.value.lastFixAt == null ||
@@ -303,6 +405,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                         true
             mutableLive.value =
                 mutableLive.value.copy(
+                    cadence = stepProcessor?.cadence(now),
                     durationMillis = duration,
                     speedMetersPerSecond =
                         if (stale) null else mutableLive.value.speedMetersPerSecond,
@@ -386,6 +489,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         val sessionId: String,
         val request: CaptureRequest?,
         val source: RecordingLocationSource?,
+        val sensor: RecordingSensorSource?,
     )
 
     private fun stopCommand(
@@ -400,7 +504,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                         return@withLock null
                     if (control == StopControl.PAUSE && session.state != RecordingState.RECORDING)
                         return@withLock null
-                    StopTarget(session.id, mutableCapture.value, source).also {
+                    StopTarget(session.id, mutableCapture.value, source, sensorSource).also {
                         stoppingCapture = it.request
                     }
                 } ?: return@enqueue null
@@ -410,6 +514,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                 // the service must acquire that lock to commit every Fix preceding the flush
                 // barrier.
                 flushRecordingSource(target.source)
+                target.sensor?.let { withTimeoutOrNull(2_000) { it.flush() } }
                 lock.withLock {
                     if (current?.id != target.sessionId) return@withLock null
                     if (current?.state == RecordingState.INTERRUPTED) {
@@ -484,6 +589,13 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     private suspend fun beginSegment(session: ActivitySession, now: Long) {
         // A delayed onDestroy from the previous service/segment must not interrupt this start.
         host = null
+        sensorWallOrigin = System.currentTimeMillis()
+        sensorElapsedOrigin = now
+        stepProcessor = StepMetricsProcessor(now)
+        metricDays.clear()
+        metricDays.putAll(dao.getMetricDays(session.id).associateBy { it.date })
+        metricsDirty = false
+        lastMetricCheckpointNanos = now
         val last = dao.lastPoint(session.id)
         processor =
             TrackProcessor(
@@ -521,6 +633,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     private suspend fun finishLocked(): ActivitySession? {
         val session = current ?: return null
         stopCapture()
+        saveMetricsLocked()
         timeline?.pause(SystemClock.elapsedRealtimeNanos())
         val finished =
             snapshot(session)
@@ -546,6 +659,9 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         host = null
         timeline = null
         processor = null
+        stepProcessor = null
+        metricDays.clear()
+        metricsDirty = false
         mutableServiceSession.value = null
         mutableLive.value = RecordingLiveState()
     }
@@ -563,6 +679,8 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         stoppingCapture = null
         source?.close()
         source = null
+        sensorSource?.close()
+        sensorSource = null
     }
 
     private suspend fun saveState(
@@ -570,11 +688,12 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         state: RecordingState,
         message: String? = null,
     ) {
+        saveMetricsLocked()
         val saved = snapshot(session).copy(state = state)
         dao.updateSession(saved)
         current = saved
         publish(saved, message)
-        mutableLive.value = mutableLive.value.copy(speedMetersPerSecond = null)
+        mutableLive.value = mutableLive.value.copy(speedMetersPerSecond = null, cadence = null)
     }
 
     private suspend fun checkpointLocked() {

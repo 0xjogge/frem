@@ -108,7 +108,14 @@ class RecordingService : Service() {
                             repository.live.value,
                             imperial,
                         ),
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                            if (
+                                Build.VERSION.SDK_INT >= 34 &&
+                                    checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
+                                        PackageManager.PERMISSION_GRANTED
+                            )
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+                            else 0,
                     )
                     foreground = true
                     lastNotificationContent = session?.let { notificationContent(it) }
@@ -159,6 +166,25 @@ class RecordingService : Service() {
     private fun observe() {
         if (observing) return
         observing = true
+        scope.launch {
+            repository.capture.collectLatest { request ->
+                if (request == null) return@collectLatest
+                val sensors = repository.newSensorSource(request)
+                try {
+                    if (!repository.registerSensorSource(request, sensors)) return@collectLatest
+                    sensors.events().collect { event ->
+                        if (event is RecordingSensorEvent.Barrier) event.completion.complete(Unit)
+                        else repository.acceptSensor(request, event)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Optional sensor loss must not discard an otherwise valid GPS recording.
+                } finally {
+                    sensors.close()
+                }
+            }
+        }
         scope.launch {
             repository.capture.collectLatest { request ->
                 if (request == null) return@collectLatest

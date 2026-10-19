@@ -83,6 +83,7 @@ fun FremApp(vm: FremViewModel) {
     val recordedActivities by vm.recordedActivities.collectAsStateWithLifecycle()
     val activeRecording by vm.activeRecording.collectAsStateWithLifecycle()
     val recordingLive by vm.recordingLive.collectAsStateWithLifecycle()
+    val nativeMetrics by vm.nativeMetrics.collectAsStateWithLifecycle()
     val recordingBusy by vm.recordingBusy.collectAsStateWithLifecycle()
     val recordingDestination by vm.recordingDestination.collectAsStateWithLifecycle()
     val recordingMessage by vm.recordingMessage.collectAsStateWithLifecycle()
@@ -237,6 +238,13 @@ fun FremApp(vm: FremViewModel) {
         ) {
             required += Manifest.permission.ACCESS_COARSE_LOCATION
             required += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        if (
+            !type.cycling &&
+                context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) !=
+                    PackageManager.PERMISSION_GRANTED
+        ) {
+            required += Manifest.permission.ACTIVITY_RECOGNITION
         }
         val permissionPreferences =
             context.getSharedPreferences("frem_recording_ui", android.content.Context.MODE_PRIVATE)
@@ -546,6 +554,9 @@ fun FremApp(vm: FremViewModel) {
                                 accuracyMeters = recordingLive.accuracyMeters,
                                 lastFixAt = recordingLive.lastFixAt,
                                 statusMessage = recordingMessage ?: recordingLive.message,
+                                nativeMetrics =
+                                    nativeMetrics.filter { it.sessionId == activeRecording?.id },
+                                cadence = recordingLive.cadence,
                                 busy = recordingBusy || pendingActivityType != null,
                                 onStart = { requestRecording(it) },
                                 onPause = { vm.recordingAction { vm.recording.pauseAndAwait() } },
@@ -574,6 +585,10 @@ fun FremApp(vm: FremViewModel) {
                                     session = selectedActivity,
                                     points = routePoints,
                                     preferences = preferences,
+                                    nativeMetrics =
+                                        nativeMetrics.filter {
+                                            it.sessionId == selectedActivity.id
+                                        },
                                     onBack = navigation::goBack,
                                     onEdit = { title, type ->
                                         vm.recordingAction {

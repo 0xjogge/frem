@@ -29,6 +29,12 @@ class FremViewModel(application: Application) : AndroidViewModel(application) {
     val activeRecording =
         recording.active.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val recordingLive = recording.live
+    val nativeMetrics =
+        recording.nativeMetrics.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList(),
+        )
     val recordingBusy = MutableStateFlow(false)
     val recordingDestination = MutableStateFlow(false)
     val recordingMessage = MutableStateFlow<String?>(null)

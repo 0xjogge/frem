@@ -1,6 +1,7 @@
 package dk.frem.app.data
 
 import androidx.room.*
+import dk.frem.app.recording.ActivityDayMetrics
 import dk.frem.app.recording.ActivitySession
 import dk.frem.app.recording.RecordingDao
 import dk.frem.app.recording.TrackPoint
@@ -70,8 +71,9 @@ interface FremDao {
             SleepNight::class,
             ActivitySession::class,
             TrackPoint::class,
+            ActivityDayMetrics::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class FremDatabase : RoomDatabase() {
@@ -80,6 +82,23 @@ abstract class FremDatabase : RoomDatabase() {
     abstract fun recordingDao(): RecordingDao
 
     companion object {
+        val MIGRATION_4_5 =
+            object : androidx.room.migration.Migration(4, 5) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS activity_day_metrics (
+                                            sessionId TEXT NOT NULL, date TEXT NOT NULL, steps INTEGER,
+                                            cadenceSteps REAL NOT NULL, cadenceMillis INTEGER NOT NULL,
+                                            moderateMillis INTEGER NOT NULL, vigorousMillis INTEGER NOT NULL,
+                                            PRIMARY KEY(sessionId, date), FOREIGN KEY(sessionId) REFERENCES activity_sessions(id)
+                                            ON UPDATE NO ACTION ON DELETE CASCADE)
+                        """
+                            .trimIndent(),
+                    )
+                }
+            }
+
         val MIGRATION_3_4 =
             object : androidx.room.migration.Migration(3, 4) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

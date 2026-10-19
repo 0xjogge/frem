@@ -4,10 +4,19 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RecordingDao {
+    @Query("SELECT * FROM activity_day_metrics ORDER BY date DESC, sessionId")
+    fun metricDays(): Flow<List<ActivityDayMetrics>>
+
+    @Query("SELECT * FROM activity_day_metrics WHERE sessionId = :id")
+    suspend fun getMetricDays(id: String): List<ActivityDayMetrics>
+
+    @Upsert suspend fun putMetricDays(days: List<ActivityDayMetrics>)
+
     @Query("SELECT * FROM activity_sessions ORDER BY start DESC, id")
     fun sessions(): Flow<List<ActivitySession>>
 

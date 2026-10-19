@@ -41,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import dk.frem.app.data.Preferences
+import dk.frem.app.recording.ActivityDayMetrics
 import dk.frem.app.recording.ActivitySession
 import dk.frem.app.recording.ActivityType
 import dk.frem.app.recording.RecordingState
@@ -90,6 +91,8 @@ fun RecordingScreen(
     onDiscard: () -> Unit,
     onBack: () -> Unit,
     initialType: ActivityType? = null,
+    nativeMetrics: List<ActivityDayMetrics> = emptyList(),
+    cadence: Double? = null,
 ) {
     BackHandler(onBack = onBack)
     if (session == null) {
@@ -140,6 +143,12 @@ fun RecordingScreen(
                     lastFixAt = lastFixAt,
                     preferences = preferences,
                 )
+                if (!session.type.cycling)
+                    NativeActivityReadings(
+                        nativeMetrics,
+                        cadence,
+                        Modifier.padding(horizontal = 20.dp),
+                    )
                 Text(
                     when (session.state) {
                         RecordingState.RECORDING ->
@@ -679,6 +688,7 @@ fun ActivityDetailScreen(
     onEdit: (String, ActivityType) -> Unit,
     onDelete: () -> Unit,
     onExport: () -> Unit,
+    nativeMetrics: List<ActivityDayMetrics> = emptyList(),
 ) {
     BackHandler(onBack = onBack)
     var editDialog by rememberSaveable(session.id) { mutableStateOf(false) }
@@ -798,6 +808,7 @@ fun ActivityDetailScreen(
                             Modifier.weight(1f),
                         )
                     }
+                    NativeActivityReadings(nativeMetrics)
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -916,6 +927,33 @@ fun ActivityDetailScreen(
                     Text("Keep activity")
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun NativeActivityReadings(
+    days: List<ActivityDayMetrics>,
+    liveCadence: Double? = null,
+    modifier: Modifier = Modifier,
+) {
+    val movingMillis = days.sumOf { it.cadenceMillis }
+    val average =
+        if (movingMillis > 0) days.sumOf { it.cadenceSteps } * 60_000 / movingMillis else null
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Phone activity measurements", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "${number(liveCadence ?: average)} steps/min · ${number(days.mapNotNull { it.steps }.takeIf { it.isNotEmpty() }?.sum())} steps",
+            modifier = Modifier.testTag("native_cadence"),
+        )
+        Text(
+            "Estimated active time: ${number(if (movingMillis > 0) days.sumOf { it.moderateMillis + it.vigorousMillis } / 60_000.0 else null, 1)} min",
+            modifier = Modifier.testTag("native_active_minutes"),
+        )
+        Text(
+            "Cadence uses detected moving intervals. Moderate/vigorous time is estimated from sustained step rate (100/130 steps/min). Physical activity access and a hardware step detector are needed.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

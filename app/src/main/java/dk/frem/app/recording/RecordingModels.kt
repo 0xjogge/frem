@@ -77,4 +77,5 @@ data class RecordingLiveState(
     val lastFixAt: Long? = null,
     val durationMillis: Long = 0,
     val message: String? = null,
+    val cadence: Double? = null,
 )
