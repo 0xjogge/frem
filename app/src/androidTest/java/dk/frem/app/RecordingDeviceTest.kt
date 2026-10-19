@@ -19,6 +19,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -178,6 +180,9 @@ class RecordingDeviceTest {
             click("activity_detail_back")
             awaitTag("activity_list")
             awaitTag("recorded_activity_$id", scroll = true)
+            // A partly visible card exposes only its clipped text to Android accessibility.
+            // History has no active native map, so scroll the whole card before inspecting it.
+            compose.onNodeWithTag("recorded_activity_$id").performScrollTo()
             waitFor {
                 findTag("recorded_activity_$id")?.let {
                     it.containsText(title) && it.containsText("Cycling")
