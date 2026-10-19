@@ -15,15 +15,15 @@ let
     fi
   '';
   fakeAvdmanager = pkgs.writeShellScript "fake-avdmanager" ''
-    directory="$ANDROID_AVD_HOME/frem-api-35.avd"
+    directory="$ANDROID_AVD_HOME/frem-api-36.avd"
     mkdir -p "$directory"
     printf 'image.sysdir.1=/nix/store/old-sdk/system-images/\nhw.ramSize=2048\n' > "$directory/config.ini"
-    printf 'path=%s\n' "$directory" > "$ANDROID_AVD_HOME/frem-api-35.ini"
+    printf 'path=%s\n' "$directory" > "$ANDROID_AVD_HOME/frem-api-36.ini"
     printf 'existing device data\n' > "$directory/userdata-qemu.img"
   '';
   sdk = pkgs.runCommand "fake-android-sdk" { } ''
     mkdir -p "$out/bin" "$out/libexec/android-sdk/emulator" \
-      "$out/libexec/android-sdk/system-images/android-35/google_apis/x86_64"
+      "$out/libexec/android-sdk/system-images/android-36/google_apis/x86_64"
     ln -s ${fakeEmulator} "$out/libexec/android-sdk/emulator/emulator"
     ln -s ${fakeAdb} "$out/bin/adb"
     ln -s ${fakeAvdmanager} "$out/bin/avdmanager"
@@ -53,6 +53,11 @@ pkgs.runCommand "frem-emulator-check"
     export ANDROID_SERIAL=physical-device
     export QT_PLUGIN_PATH=/desktop/qt/plugins
 
+    # The API 36 device must not reuse or overwrite the previous API 35 device.
+    legacy="$ANDROID_AVD_HOME/frem-api-35.avd"
+    mkdir -p "$legacy"
+    printf 'API 35 device data\n' > "$legacy/userdata-qemu.img"
+
     assert_stopped() {
       if kill -0 "$(cat "$ANDROID_AVD_HOME/emulator.pid")" 2>/dev/null; then
         printf 'Emulator was not stopped\n' >&2
@@ -70,10 +75,11 @@ pkgs.runCommand "frem-emulator-check"
       printf "command output\n"
     ' <<< 'command input' > stdout 2> success.log
     [[ "$(cat stdout)" == 'command output' ]]
+    [[ "$(cat "$legacy/userdata-qemu.img")" == 'API 35 device data' ]]
     assert_stopped
 
     # An existing AVD must retain its data when the SDK path changes.
-    directory="$ANDROID_AVD_HOME/frem-api-35.avd"
+    directory="$ANDROID_AVD_HOME/frem-api-36.avd"
     printf 'image.sysdir.1=/nix/store/another-sdk/image/\nhw.ramSize=2048\n' > "$directory/config.ini"
     printf 'user changes\n' > "$directory/userdata-qemu.img"
     status=0
@@ -85,7 +91,7 @@ pkgs.runCommand "frem-emulator-check"
     [[ "$status" == 7 ]]
     [[ "$(cat "$directory/userdata-qemu.img")" == 'user changes' ]]
     grep -qxF 'hw.ramSize=2048' "$directory/config.ini"
-    grep -qxF 'image.sysdir.1=system-images/android-35/google_apis/x86_64/' "$directory/config.ini"
+    grep -qxF 'image.sysdir.1=system-images/android-36/google_apis/x86_64/' "$directory/config.ini"
     assert_stopped
 
     status=0

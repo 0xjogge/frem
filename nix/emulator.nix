@@ -20,7 +20,7 @@ pkgs.writeShellApplication {
       cat <<'HELP'
     Usage: frem-emulator [OPTIONS] [-- COMMAND [ARG...]]
 
-    Run Frem's API 35 Google APIs x86_64 Pixel 6 emulator.
+    Run Frem's API 36 Google APIs x86_64 Pixel 6 emulator.
     With COMMAND, wait for boot, run it with ANDROID_SERIAL set, then stop the
     emulator and return the command's exit status. Command stdout stays clean;
     emulator output and progress go to stderr.
@@ -82,12 +82,12 @@ pkgs.writeShellApplication {
     ANDROID_AVD_HOME="$(realpath -m -- "''${ANDROID_AVD_HOME:-''${ANDROID_EMULATOR_HOME:-''${ANDROID_USER_HOME:-$HOME/.android}}/avd}")"
     export ANDROID_AVD_HOME
     export ANDROID_SERIAL="emulator-$port"
-    avd_name=frem-api-35
-    image_path=system-images/android-35/google_apis/x86_64/
+    avd_name=frem-api-36
+    image_path=system-images/android-36/google_apis/x86_64/
     avd_directory="$ANDROID_AVD_HOME/$avd_name.avd"
     emulator="$ANDROID_HOME/emulator/emulator"
     adb=${sdk}/bin/adb
-    [[ -d "$ANDROID_HOME/$image_path" ]] || die "API 35 system image is missing from $ANDROID_HOME"
+    [[ -d "$ANDROID_HOME/$image_path" ]] || die "API 36 system image is missing from $ANDROID_HOME"
     timeout 15 "$emulator" -accel-check >&2 || die "Enable hardware virtualization and read/write access to /dev/kvm"
 
     devices=$(timeout 15 "$adb" devices)
@@ -104,7 +104,7 @@ pkgs.writeShellApplication {
       (
         exec {avd_lock}>&-
         timeout 60 ${sdk}/bin/avdmanager create avd \
-          --name "$avd_name" --package 'system-images;android-35;google_apis;x86_64' \
+          --name "$avd_name" --package 'system-images;android-36;google_apis;x86_64' \
           --device pixel_6 --path "$avd_directory" <<< no >&2
       )
     fi

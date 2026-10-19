@@ -20,7 +20,9 @@ Without Nix, install JDK 21, Android SDK 37.0, build tools 36.0.0, Node.js, and 
 nix run .#emulator
 ```
 
-This starts a persistent API 35 Pixel 6, matching CI. Linux requires hardware virtualization and read/write access to `/dev/kvm`.
+This starts a persistent Android 16 / API 36 Pixel 6. The pinned Google APIs x86_64 image is revision 7 and includes Google Play services 25.26.35, which supports phone distance recording without an update. Linux requires hardware virtualization and read/write access to `/dev/kvm`.
+
+The device is named `frem-api-36`; any existing `frem-api-35` device and its data are preserved.
 
 Wait for **Ready**, then install and open the debug APK from another development shell:
 

@@ -3,7 +3,7 @@ let
   buildToolsVersion = "36.0.0";
   android = pkgs.androidenv.composeAndroidPackages {
     platformVersions = [
-      "35"
+      "36"
       "37"
     ];
     buildToolsVersions = [ buildToolsVersion ];
