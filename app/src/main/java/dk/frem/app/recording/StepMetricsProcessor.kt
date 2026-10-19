@@ -41,4 +41,7 @@ internal class StepMetricsProcessor(private val startedAtNanos: Long) {
         val span = window.last() - window.first()
         return if (span > 0) (window.size - 1) * 60e9 / span else null
     }
+
+    fun walkingAt(elapsed: Long): Boolean =
+        window.count { it <= elapsed && elapsed - it <= 5_000_000_000L } >= 3
 }

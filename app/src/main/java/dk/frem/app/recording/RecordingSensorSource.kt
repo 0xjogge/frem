@@ -18,6 +18,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 sealed interface RecordingSensorEvent {
     data class Step(val elapsedNanos: Long) : RecordingSensorEvent
 
+    data class Pressure(val elapsedNanos: Long, val hectopascals: Double) : RecordingSensorEvent
+
+    data class Capabilities(val steps: Boolean, val pressure: Boolean) : RecordingSensorEvent
+
     data class Barrier(val completion: CompletableDeferred<Unit>) : RecordingSensorEvent
 }
 
@@ -40,6 +44,8 @@ internal class AndroidRecordingSensorSource(
     private var barrier: CompletableDeferred<Unit>? = null
     private var sendBarrier: (() -> Unit)? = null
     private var closed = false
+    private var registered = 0
+    private var pendingFlush = 0
 
     override fun events(): Flow<RecordingSensorEvent> = callbackFlow {
         if (closed) {
@@ -55,10 +61,22 @@ internal class AndroidRecordingSensorSource(
                         if (!trySend(RecordingSensorEvent.Step(event.timestamp)).isSuccess)
                             close(IllegalStateException("Step delivery fell behind."))
                     }
+                    if (event.sensor.type == Sensor.TYPE_PRESSURE) {
+                        if (
+                            !trySend(
+                                    RecordingSensorEvent.Pressure(
+                                        event.timestamp,
+                                        event.values[0].toDouble(),
+                                    ),
+                                )
+                                .isSuccess
+                        )
+                            close(IllegalStateException("Pressure delivery fell behind."))
+                    }
                 }
 
                 override fun onFlushCompleted(sensor: Sensor?) {
-                    sendBarrier?.invoke()
+                    if (--pendingFlush <= 0) sendBarrier?.invoke()
                 }
             }
         listener = candidate
@@ -71,21 +89,29 @@ internal class AndroidRecordingSensorSource(
             }
         }
         try {
+            var steps = false
             if (
                 !type.cycling &&
                     context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
                         PackageManager.PERMISSION_GRANTED
             ) {
                 manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
-                    manager.registerListener(
-                        candidate,
-                        it,
-                        SensorManager.SENSOR_DELAY_NORMAL,
-                        5_000_000,
-                        handler,
-                    )
+                    steps =
+                        manager.registerListener(
+                            candidate,
+                            it,
+                            SensorManager.SENSOR_DELAY_NORMAL,
+                            5_000_000,
+                            handler,
+                        )
                 }
             }
+            val pressure =
+                manager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let {
+                    manager.registerListener(candidate, it, 1_000_000, 5_000_000, handler)
+                } == true
+            registered = (if (steps) 1 else 0) + (if (pressure) 1 else 0)
+            trySend(RecordingSensorEvent.Capabilities(steps, pressure))
             awaitClose {
                 manager.unregisterListener(candidate)
                 listener = null
@@ -103,6 +129,7 @@ internal class AndroidRecordingSensorSource(
         val completion = CompletableDeferred<Unit>()
         handler.post {
             barrier = completion
+            pendingFlush = registered
             val active = listener
             if (active == null || !manager.flush(active))
                 sendBarrier?.invoke() ?: completion.complete(Unit)

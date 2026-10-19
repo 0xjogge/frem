@@ -24,6 +24,7 @@ internal data class TrackUpdate(
     val point: TrackPoint?,
     val distanceMeters: Double,
     val ascentMeters: Double?,
+    val descentMeters: Double?,
     val speedMetersPerSecond: Float?,
     val fix: RecordingFix,
 )
@@ -37,11 +38,15 @@ internal class TrackProcessor(
     private var segment: Int = 0,
     initialDistanceMeters: Double = 0.0,
     initialAscentMeters: Double? = null,
+    initialDescentMeters: Double? = null,
 ) {
     var distanceMeters: Double = initialDistanceMeters
         private set
 
     var ascentMeters: Double? = initialAscentMeters
+        private set
+
+    var descentMeters: Double? = initialDescentMeters
         private set
 
     private var anchor: RecordingFix? = null
@@ -151,7 +156,12 @@ internal class TrackProcessor(
         }
         previousSignal = fix
         val altitude = reliableAltitude(fix)
-        if (moved) updateElevation(fix.elapsedRealtimeNanos, altitude)
+        if (moved)
+            updateElevation(
+                fix.elapsedRealtimeNanos,
+                altitude,
+                maxOf(3.0, (fix.verticalAccuracyMeters ?: 10f) * 2.0),
+            )
         val point =
             if (moved) {
                 if (currentAnchor != null) {
@@ -172,7 +182,14 @@ internal class TrackProcessor(
                     speedMetersPerSecond = smoothedSpeed?.toFloat(),
                 )
             } else null
-        return TrackUpdate(point, distanceMeters, ascentMeters, smoothedSpeed?.toFloat(), fix)
+        return TrackUpdate(
+            point,
+            distanceMeters,
+            ascentMeters,
+            descentMeters,
+            smoothedSpeed?.toFloat(),
+            fix,
+        )
     }
 
     private fun reliableAltitude(fix: RecordingFix): Double? =
@@ -184,7 +201,7 @@ internal class TrackProcessor(
                 } == true
         }
 
-    private fun updateElevation(elapsed: Long, altitude: Double?) {
+    private fun updateElevation(elapsed: Long, altitude: Double?, threshold: Double) {
         if (altitude == null) return
         val previous = previousElevation
         if (
@@ -198,12 +215,16 @@ internal class TrackProcessor(
         if (elevationWindow.size > 3) elevationWindow.removeFirst()
         val filtered = elevationWindow.sorted()[elevationWindow.size / 2]
         if (ascentMeters == null) ascentMeters = 0.0
+        if (descentMeters == null) descentMeters = 0.0
         val reference = elevationReference
         if (reference == null) elevationReference = filtered
-        else if (filtered - reference >= 3.0) {
+        else if (filtered - reference >= threshold) {
             ascentMeters = (ascentMeters ?: 0.0) + filtered - reference
             elevationReference = filtered
-        } else if (reference - filtered >= 3.0) elevationReference = filtered
+        } else if (reference - filtered >= threshold) {
+            descentMeters = (descentMeters ?: 0.0) + reference - filtered
+            elevationReference = filtered
+        }
     }
 
     companion object {

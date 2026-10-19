@@ -25,7 +25,14 @@ data class ActivityDayMetrics(
     val cadenceMillis: Long = 0,
     val moderateMillis: Long = 0,
     val vigorousMillis: Long = 0,
+    val ascentMeters: Double? = null,
+    val descentMeters: Double? = null,
+    val floorAscentMeters: Double? = null,
+    val elevationSource: String? = null,
 ) {
+    val floors: Double?
+        get() = floorAscentMeters?.let { kotlin.math.floor(it / 3.0) }
+
     val cadence: Double?
         get() = if (cadenceMillis > 0) cadenceSteps * 60_000.0 / cadenceMillis else null
 

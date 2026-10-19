@@ -93,6 +93,7 @@ fun RecordingScreen(
     initialType: ActivityType? = null,
     nativeMetrics: List<ActivityDayMetrics> = emptyList(),
     cadence: Double? = null,
+    sensorMessage: String? = null,
 ) {
     BackHandler(onBack = onBack)
     if (session == null) {
@@ -149,6 +150,19 @@ fun RecordingScreen(
                         cadence,
                         Modifier.padding(horizontal = 20.dp),
                     )
+                sensorMessage?.let {
+                    Text(
+                        it,
+                        Modifier.padding(horizontal = 20.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                ElevationReadings(
+                    session,
+                    nativeMetrics,
+                    preferences,
+                    Modifier.padding(horizontal = 20.dp),
+                )
                 Text(
                     when (session.state) {
                         RecordingState.RECORDING ->
@@ -809,6 +823,7 @@ fun ActivityDetailScreen(
                         )
                     }
                     NativeActivityReadings(nativeMetrics)
+                    ElevationReadings(session, nativeMetrics, preferences)
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -846,7 +861,7 @@ fun ActivityDetailScreen(
                             )
                             if (session.ascentMeters != null) {
                                 Text(
-                                    "Ascent is an estimate from recorded elevation and can be affected by GPS accuracy.",
+                                    "Elevation gain/loss uses ${session.elevationSource ?: "GPS"}. Pressure is filtered with a 2 m threshold; GPS uses a threshold based on vertical accuracy. Pauses and gaps start new baselines.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -952,6 +967,33 @@ private fun NativeActivityReadings(
         )
         Text(
             "Cadence uses detected moving intervals. Moderate/vigorous time is estimated from sustained step rate (100/130 steps/min). Physical activity access and a hardware step detector are needed.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ElevationReadings(
+    session: ActivitySession,
+    days: List<ActivityDayMetrics>,
+    preferences: Preferences,
+    modifier: Modifier = Modifier,
+) {
+    val factor = if (preferences.imperial) 3.28084 else 1.0
+    val unit = if (preferences.imperial) "ft" else "m"
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Elevation gain & loss", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "↑ ${number(session.ascentMeters?.times(factor))} $unit · ↓ ${number(session.descentMeters?.times(factor))} $unit",
+            modifier = Modifier.testTag("native_elevation"),
+        )
+        Text(
+            "${session.elevationSource ?: "Waiting for elevation"} · ${number(days.mapNotNull { it.floors }.takeIf { it.isNotEmpty() }?.sum())} floor equivalents",
+            modifier = Modifier.testTag("native_floors"),
+        )
+        Text(
+            "One floor equivalent is 3 m climbed with detected steps. Native floors need a barometer; GPS altitude alone is not used for floors.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

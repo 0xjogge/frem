@@ -73,7 +73,7 @@ interface FremDao {
             TrackPoint::class,
             ActivityDayMetrics::class,
         ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class FremDatabase : RoomDatabase() {
@@ -82,6 +82,18 @@ abstract class FremDatabase : RoomDatabase() {
     abstract fun recordingDao(): RecordingDao
 
     companion object {
+        val MIGRATION_5_6 =
+            object : androidx.room.migration.Migration(5, 6) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE activity_sessions ADD COLUMN descentMeters REAL")
+                    db.execSQL("ALTER TABLE activity_sessions ADD COLUMN elevationSource TEXT")
+                    listOf("ascentMeters", "descentMeters", "floorAscentMeters").forEach {
+                        db.execSQL("ALTER TABLE activity_day_metrics ADD COLUMN $it REAL")
+                    }
+                    db.execSQL("ALTER TABLE activity_day_metrics ADD COLUMN elevationSource TEXT")
+                }
+            }
+
         val MIGRATION_4_5 =
             object : androidx.room.migration.Migration(4, 5) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

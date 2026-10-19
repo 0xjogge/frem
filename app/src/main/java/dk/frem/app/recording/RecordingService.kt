@@ -180,6 +180,7 @@ class RecordingService : Service() {
                     throw e
                 } catch (_: Exception) {
                     // Optional sensor loss must not discard an otherwise valid GPS recording.
+                    repository.sensorUnavailable(request)
                 } finally {
                     sensors.close()
                 }

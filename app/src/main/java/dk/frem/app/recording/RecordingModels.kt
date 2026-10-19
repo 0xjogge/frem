@@ -42,6 +42,8 @@ data class ActivitySession(
     val lastCheckpoint: Long = start,
     // SQLite permits multiple NULLs in a unique index, but only one unfinished session.
     val activeSlot: Int? = if (state == RecordingState.FINISHED) null else 1,
+    val descentMeters: Double? = null,
+    val elevationSource: String? = null,
 )
 
 @Entity(
@@ -78,4 +80,5 @@ data class RecordingLiveState(
     val durationMillis: Long = 0,
     val message: String? = null,
     val cadence: Double? = null,
+    val sensorMessage: String? = null,
 )

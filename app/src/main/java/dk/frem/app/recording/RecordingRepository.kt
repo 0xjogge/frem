@@ -63,6 +63,12 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     private var lastMetricCheckpointNanos = 0L
     private var sensorWallOrigin = 0L
     private var sensorElapsedOrigin = 0L
+    private var pressureProcessor: PressureMetricsProcessor? = null
+    private var pressureExpected = false
+    private var lastPressureNanos: Long? = null
+    private var lastMovingNanos: Long? = null
+    private var lastGpsAscent = 0.0
+    private var lastGpsDescent = 0.0
     val nativeMetrics: Flow<List<ActivityDayMetrics>> = dao.metricDays()
 
     val sessions: Flow<List<ActivitySession>> = flow {
@@ -146,9 +152,96 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                         )
                 }
                 is RecordingSensorEvent.Barrier -> event.completion.complete(Unit)
+                is RecordingSensorEvent.Capabilities -> {
+                    pressureExpected = event.pressure
+                    mutableLive.value =
+                        mutableLive.value.copy(
+                            sensorMessage =
+                                if (request.type.cycling || event.steps) null
+                                else
+                                    "Step cadence needs physical activity access and a hardware step detector.",
+                        )
+                }
+                is RecordingSensorEvent.Pressure -> {
+                    val now = SystemClock.elapsedRealtimeNanos()
+                    val walking = stepProcessor?.walkingAt(event.elapsedNanos) == true
+                    val gpsMoving =
+                        lastMovingNanos?.let {
+                            event.elapsedNanos >= it && event.elapsedNanos - it <= 10_000_000_000L
+                        } == true
+                    if (
+                        lastPressureNanos?.let { event.elapsedNanos - it > 10_000_000_000L } == true
+                    )
+                        pressureProcessor = PressureMetricsProcessor(event.elapsedNanos)
+                    val delta =
+                        pressureProcessor?.accept(
+                            event.elapsedNanos,
+                            event.hectopascals,
+                            now,
+                            walking || gpsMoving,
+                        ) ?: return
+                    pressureExpected = true
+                    lastPressureNanos = event.elapsedNanos
+                    recordElevation(
+                        event.elapsedNanos,
+                        delta.ascent,
+                        delta.descent,
+                        "Barometer",
+                        delta.ascent.takeIf { walking && !request.type.cycling },
+                    )
+                    val previous = current!!
+                    current =
+                        previous.copy(
+                            ascentMeters = (previous.ascentMeters ?: 0.0) + delta.ascent,
+                            descentMeters = (previous.descentMeters ?: 0.0) + delta.descent,
+                            elevationSource =
+                                combinedElevationSource(previous.elevationSource, "Barometer"),
+                        )
+                    mutableServiceSession.value = current
+                }
             }
         }
     }
+
+    internal suspend fun sensorUnavailable(request: CaptureRequest) = lock.withLock {
+        if (mutableCapture.value == request) {
+            pressureExpected = false
+            lastPressureNanos = null
+            stepProcessor = StepMetricsProcessor(SystemClock.elapsedRealtimeNanos())
+            mutableLive.value =
+                mutableLive.value.copy(
+                    cadence = null,
+                    sensorMessage =
+                        "Phone sensors stopped. Saved readings are retained; GPS recording continues.",
+                )
+        }
+    }
+
+    private fun recordElevation(
+        elapsed: Long,
+        ascent: Double,
+        descent: Double,
+        source: String,
+        floorAscent: Double? = null,
+    ) {
+        val day = metricDay(elapsed)
+        metricDays[day.date] =
+            day.copy(
+                ascentMeters = (day.ascentMeters ?: 0.0) + ascent,
+                descentMeters = (day.descentMeters ?: 0.0) + descent,
+                floorAscentMeters =
+                    if (floorAscent != null) (day.floorAscentMeters ?: 0.0) + floorAscent
+                    else day.floorAscentMeters,
+                elevationSource = combinedElevationSource(day.elevationSource, source),
+            )
+        metricsDirty = true
+    }
+
+    private fun combinedElevationSource(previous: String?, source: String): String =
+        if (previous == null || previous == source) source else "GPS + barometer"
+
+    private fun preferPressure(now: Long): Boolean =
+        pressureExpected && now - (lastPressureNanos ?: sensorElapsedOrigin) <= 10_000_000_000L
 
     private fun wallTime(elapsed: Long): Long =
         sensorWallOrigin + (elapsed - sensorElapsedOrigin) / 1_000_000
@@ -365,11 +458,32 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                 val update =
                     processor?.accept(fix, SystemClock.elapsedRealtimeNanos()) ?: return@withContext
                 val previous = current ?: return@withContext
+                val gpsAscent =
+                    ((update.ascentMeters ?: lastGpsAscent) - lastGpsAscent).coerceAtLeast(0.0)
+                val gpsDescent =
+                    ((update.descentMeters ?: lastGpsDescent) - lastGpsDescent).coerceAtLeast(0.0)
+                lastGpsAscent = update.ascentMeters ?: lastGpsAscent
+                lastGpsDescent = update.descentMeters ?: lastGpsDescent
+                if (update.distanceMeters > previous.distanceMeters)
+                    lastMovingNanos = fix.elapsedRealtimeNanos
+                val gpsElevation =
+                    !preferPressure(fix.elapsedRealtimeNanos) && update.ascentMeters != null
+                if (gpsElevation)
+                    recordElevation(fix.elapsedRealtimeNanos, gpsAscent, gpsDescent, "GPS")
                 val snapshot =
                     snapshot(previous)
                         .copy(
                             distanceMeters = update.distanceMeters,
-                            ascentMeters = update.ascentMeters,
+                            ascentMeters =
+                                if (gpsElevation) (previous.ascentMeters ?: 0.0) + gpsAscent
+                                else previous.ascentMeters,
+                            descentMeters =
+                                if (gpsElevation) (previous.descentMeters ?: 0.0) + gpsDescent
+                                else previous.descentMeters,
+                            elevationSource =
+                                if (gpsElevation)
+                                    combinedElevationSource(previous.elevationSource, "GPS")
+                                else previous.elevationSource,
                         )
                 database.withTransaction {
                     update.point?.let { dao.insertPoint(it) }
@@ -592,6 +706,12 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         sensorWallOrigin = System.currentTimeMillis()
         sensorElapsedOrigin = now
         stepProcessor = StepMetricsProcessor(now)
+        pressureProcessor = PressureMetricsProcessor(now)
+        pressureExpected = false
+        lastPressureNanos = null
+        lastMovingNanos = null
+        lastGpsAscent = session.ascentMeters ?: 0.0
+        lastGpsDescent = session.descentMeters ?: 0.0
         metricDays.clear()
         metricDays.putAll(dao.getMetricDays(session.id).associateBy { it.date })
         metricsDirty = false
@@ -606,6 +726,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                 segment = last?.segment?.plus(1) ?: 0,
                 initialDistanceMeters = session.distanceMeters,
                 initialAscentMeters = session.ascentMeters,
+                initialDescentMeters = session.descentMeters,
             )
         lastCheckpointNanos = now
         processorLastFixNanos = null

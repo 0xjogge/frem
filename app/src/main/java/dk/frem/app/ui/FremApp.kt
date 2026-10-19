@@ -557,6 +557,7 @@ fun FremApp(vm: FremViewModel) {
                                 nativeMetrics =
                                     nativeMetrics.filter { it.sessionId == activeRecording?.id },
                                 cadence = recordingLive.cadence,
+                                sensorMessage = recordingLive.sensorMessage,
                                 busy = recordingBusy || pendingActivityType != null,
                                 onStart = { requestRecording(it) },
                                 onPause = { vm.recordingAction { vm.recording.pauseAndAwait() } },
