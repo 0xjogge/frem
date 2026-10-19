@@ -26,7 +26,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-fun MetricDetail(metric: Metric, data: AppData, onConnect: () -> Unit) {
+fun MetricDetail(
+    metric: Metric,
+    data: AppData,
+    onConnect: () -> Unit,
+    onPhone: () -> Unit = onConnect,
+) {
     ObserveDialogFrames()
     val listState = rememberLazyListState()
     ObserveBenchmarkScroll("metric_history_list", listState)
@@ -136,6 +141,13 @@ fun MetricDetail(metric: Metric, data: AppData, onConnect: () -> Unit) {
         remember(recorded, isAverage) {
             recorded.takeIf { it.isNotEmpty() }?.let { if (isAverage) it.average() else it.sum() }
         }
+    val includesPhoneDistance =
+        metric == Metric.DISTANCE &&
+            data.days.any {
+                it.localDate in start..end &&
+                    it.distance != null &&
+                    it.distanceSource == "Phone recording"
+            }
     val periodLabel =
         remember(range, start, end) {
             if (range == "D") dateLabel(end) else "${dateText(start, "d MMM")} – ${dateLabel(end)}"
@@ -206,7 +218,11 @@ fun MetricDetail(metric: Metric, data: AppData, onConnect: () -> Unit) {
                     Text(
                         if (selected != null) selected!!.first
                         else if (isAverage) "Recorded daily average"
-                        else if (metric == Metric.ACTIVE_ENERGY || metric == Metric.TOTAL_ENERGY)
+                        else if (
+                            metric == Metric.ACTIVE_ENERGY ||
+                                metric == Metric.TOTAL_ENERGY ||
+                                includesPhoneDistance
+                        )
                             "Estimated total"
                         else "Recorded total",
                         style = MaterialTheme.typography.bodyMedium,
@@ -239,6 +255,8 @@ fun MetricDetail(metric: Metric, data: AppData, onConnect: () -> Unit) {
                 InfoCard(
                     "No ${metric.title.lowercase()} data in this period",
                     when (metric) {
+                        Metric.DISTANCE ->
+                            "Health Connect may have steps without distance. Enable phone recording with physical activity access, or connect an app or watch that shares distance. Phone recording collects new data after it is enabled."
                         Metric.FLOORS,
                         Metric.ELEVATION ->
                             "Frem imports these measurements from Health Connect. A compatible app or watch must record them."
@@ -255,8 +273,16 @@ fun MetricDetail(metric: Metric, data: AppData, onConnect: () -> Unit) {
                             "Choose this data category in Health Connect and enable built-in tracking if your Android version supports it."
                     },
                     metric.icon,
-                    "Connect data",
-                    onConnect,
+                    if (metric == Metric.DISTANCE) "Enable phone distance" else "Connect data",
+                    if (metric == Metric.DISTANCE) onPhone else onConnect,
+                )
+            }
+        if (metric == Metric.DISTANCE)
+            item(key = "distance-info", contentType = "info") {
+                Text(
+                    "Health Connect distance is used when available. Otherwise, phone recording supplies an estimated distance from Google Play services. The two totals are never added together. Enable phone steps & distance in Settings to start recording; recent Google Play services are required.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         if (metric == Metric.ACTIVE_ENERGY || metric == Metric.TOTAL_ENERGY)

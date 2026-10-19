@@ -37,6 +37,9 @@ fun PrivacyScreen(onDone: () -> Unit, includeBottomInset: Boolean = false) {
                 "Your data is stored in Frem’s private on-device database. Frem has no account, advertising, analytics, or cloud backend. CSV files are only written to a location you explicitly choose. Android app-data backup is disabled.",
             )
             Text(
+                "With physical activity access, phone recording uses Google Play services to collect steps and estimated distance on your phone. Frem uses these as a fallback when Health Connect has no reading for that metric. Phone recording starts collecting after it is enabled and does not require location access.",
+            )
+            Text(
                 "Daily reminders are optional and scheduled on your phone. They use your saved entries and goals to skip completed check-ins, and can use permitted background reads for fresh activity data. Notification access is requested only when you enable a reminder or send a preview. You can turn each reminder off or manage notifications in Android settings.",
             )
             Text(

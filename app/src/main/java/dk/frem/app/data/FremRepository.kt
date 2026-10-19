@@ -2,10 +2,13 @@ package dk.frem.app.data
 
 import android.content.Context
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.room.withTransaction
+import dk.frem.app.domain.mergePhoneActivity
+import dk.frem.app.domain.retainOlderPhoneDistance
 import dk.frem.app.health.HealthRepository
 import dk.frem.app.health.PhoneRecorder
 import dk.frem.app.widget.StepsWidget
@@ -114,14 +117,24 @@ class FremRepository(
                         val imported = health.import()
                         database.withTransaction {
                             val existing = dao.allDays().associateBy { it.date }
-                            val today = java.time.LocalDate.now().toString()
+                            val today = java.time.LocalDate.now()
+                            val phoneHistoryStart = today.minusDays(PhoneRecorder.HISTORY_DAYS - 1L)
                             dao.putDays(
-                                imported.days.filter { incoming ->
-                                    val previous = existing[incoming.date]
-                                    incoming.date == today ||
-                                        previous == null ||
-                                        previous.copy(updatedAt = incoming.updatedAt) != incoming
-                                },
+                                imported.days
+                                    .map { incoming ->
+                                        retainOlderPhoneDistance(
+                                            incoming,
+                                            existing[incoming.date],
+                                            phoneHistoryStart,
+                                        )
+                                    }
+                                    .filter { incoming ->
+                                        val previous = existing[incoming.date]
+                                        incoming.date == today.toString() ||
+                                            previous == null ||
+                                            previous.copy(updatedAt = incoming.updatedAt) !=
+                                                incoming
+                                    },
                             )
                             if (imported.importedKinds.isNotEmpty()) {
                                 val previous =
@@ -168,35 +181,26 @@ class FremRepository(
                         sameTimeAverage.value = imported.sameTimeAverage
                         preferences.flag("connected", true)
                     }
-                    // Select a fallback source rather than adding overlapping phone totals.
-                    // This also works when body/sleep permissions exist but step access does not.
-                    if (
-                        phone.allowed &&
-                            !background &&
-                            (HealthPermission.getReadPermission(StepsRecord::class) !in allowed ||
-                                !health.nativeStepsAvailable)
-                    ) {
+                    // Native Health Connect steps do not supply distance. Read phone activity
+                    // independently, selecting a fallback per metric rather than adding totals.
+                    if (phone.allowed) {
                         val local =
                             phone.read().map { day ->
-                                val hc = dao.day(day.date)
-                                if (hc == null || hc.source == "Phone recording") day
-                                else
-                                    hc.copy(
-                                        steps =
-                                            if (
-                                                HealthPermission.getReadPermission(
-                                                    StepsRecord::class,
-                                                ) !in allowed
-                                            )
-                                                day.steps
-                                            else hc.steps ?: day.steps,
-                                        source =
-                                            if (hc.steps == null && day.steps != null)
-                                                "Phone recording + Health Connect"
-                                            else hc.source,
-                                    )
+                                mergePhoneActivity(
+                                    dao.day(day.date),
+                                    day,
+                                    readSteps =
+                                        HealthPermission.getReadPermission(StepsRecord::class) in
+                                            allowed,
+                                    readDistance =
+                                        HealthPermission.getReadPermission(DistanceRecord::class) in
+                                            allowed,
+                                )
                             }
                         dao.putDays(local)
+                        if (!phone.distanceAvailable && local.lastOrNull()?.distance == null)
+                            message.value =
+                                "Update Google Play services to start recording phone distance. Steps are still available."
                         if (HealthPermission.getReadPermission(StepsRecord::class) !in allowed) {
                             hours.value = emptyList()
                             sameTimeAverage.value = null

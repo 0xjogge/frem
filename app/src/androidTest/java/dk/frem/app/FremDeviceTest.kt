@@ -132,12 +132,16 @@ class FremDeviceTest {
 
     @Test
     fun migrationPreservesWeightAndActivityHistory() = runBlocking {
+        for (fromVersion in 1..2) verifyHistoryMigration(fromVersion)
+    }
+
+    private suspend fun verifyHistoryMigration(fromVersion: Int) {
         val name = "migration-${UUID.randomUUID()}"
         val schemaText =
             InstrumentationRegistry.getInstrumentation()
                 .context
                 .assets
-                .open("dk.frem.app.data.FremDatabase/1.json")
+                .open("dk.frem.app.data.FremDatabase/$fromVersion.json")
                 .bufferedReader()
                 .use { it.readText() }
         val schema = org.json.JSONObject(schemaText).getJSONObject("database")
@@ -157,20 +161,24 @@ class FremDeviceTest {
                 "INSERT INTO entries (id,kind,date,value,zone,version,source,healthId,syncState,timestamp) VALUES ('migration-weight','WEIGHT','2026-10-14',81.2,'Europe/Copenhagen',1,'Frem',NULL,'pending',0)",
             )
             execSQL(
-                "INSERT INTO days (date,steps,source,updatedAt) VALUES ('2026-10-14',1234,'Health Connect',0)",
+                "INSERT INTO days (date,steps,distance,source,updatedAt) VALUES ('2026-10-14',1234,850.5,'Health Connect',0)",
             )
-            version = 1
+            version = fromVersion
             close()
         }
         val migrated =
             Room.databaseBuilder(context, FremDatabase::class.java, name)
-                .addMigrations(FremDatabase.MIGRATION_1_2)
+                .addMigrations(FremDatabase.MIGRATION_1_2, FremDatabase.MIGRATION_2_3)
                 .build()
         try {
             assertEquals(81.2, migrated.dao().entry("migration-weight")!!.value, .001)
             val day = migrated.dao().day("2026-10-14")!!
             assertEquals(1234L, day.steps)
+            assertEquals(850.5, day.distance!!, .001)
             assertNull(day.moderateMinutes)
+            assertNull(day.distanceSource)
+            migrated.dao().putDays(listOf(day.copy(distanceSource = "Phone recording")))
+            assertEquals("Phone recording", migrated.dao().day(day.date)!!.distanceSource)
         } finally {
             migrated.close()
             context.deleteDatabase(name)

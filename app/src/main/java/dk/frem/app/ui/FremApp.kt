@@ -143,6 +143,10 @@ fun FremApp(vm: FremViewModel) {
                 vm.message.value =
                     "Physical activity access was not granted. You can still use manual logging."
         }
+    fun enablePhoneRecording() {
+        if (vm.repository.phone.allowed) vm.refresh()
+        else activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+    }
     fun previewReminder() {
         if (
             !ReminderNotifications.post(
@@ -353,11 +357,7 @@ fun FremApp(vm: FremViewModel) {
                                 onConnect = { connectionSheet = true },
                                 onRequest = ::request,
                                 onHealthSettings = ::openHealthSettings,
-                                onPhone = {
-                                    activityPermission.launch(
-                                        Manifest.permission.ACTIVITY_RECOGNITION,
-                                    )
-                                },
+                                onPhone = ::enablePhoneRecording,
                                 onExport = { export.launch("frem-${data.today}.csv") },
                                 onPrivacy = { navigation.navigate(FremDestination.PRIVACY) },
                                 onWidget = {
@@ -434,11 +434,11 @@ fun FremApp(vm: FremViewModel) {
                         TextButton(
                             onClick = {
                                 connectionSheet = false
-                                activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                                enablePhoneRecording()
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Use phone recording instead")
+                            Text("Enable phone steps & distance")
                         }
                         Spacer(Modifier.height(20.dp))
                     }
@@ -457,6 +457,7 @@ fun FremApp(vm: FremViewModel) {
                         metric = null
                         connectionSheet = true
                     },
+                    onPhone = ::enablePhoneRecording,
                 )
             }
         }
@@ -585,6 +586,9 @@ fun TodayScreen(
                     Metric.DISTANCE.value(data.day),
                     data.preferences,
                     Modifier.weight(1f),
+                    if (data.day?.distanceSource == "Phone recording")
+                        "Estimated · ${Metric.DISTANCE.unit(data.preferences)}"
+                    else null,
                 ) {
                     onMetric(Metric.DISTANCE)
                 }

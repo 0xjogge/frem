@@ -60,13 +60,20 @@ interface FremDao {
 
 @Database(
     entities = [LogEntry::class, DaySummary::class, Workout::class, SleepNight::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class FremDatabase : RoomDatabase() {
     abstract fun dao(): FremDao
 
     companion object {
+        val MIGRATION_2_3 =
+            object : androidx.room.migration.Migration(2, 3) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE days ADD COLUMN distanceSource TEXT")
+                }
+            }
+
         val MIGRATION_1_2 =
             object : androidx.room.migration.Migration(1, 2) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

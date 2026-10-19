@@ -61,7 +61,19 @@ object CsvExport {
             values
                 .filter { it.second != null }
                 .forEach { (type, value, unit) ->
-                    rows += listOf(type, d.date, null, null, value, unit, d.source, null)
+                    rows +=
+                        listOf(
+                            type,
+                            d.date,
+                            null,
+                            null,
+                            value,
+                            unit,
+                            if (type == "distance") d.distanceSource ?: d.source else d.source,
+                            if (type == "distance" && d.distanceSource == "Phone recording")
+                                "estimated"
+                            else null,
+                        )
                 }
         }
         workouts.forEach {

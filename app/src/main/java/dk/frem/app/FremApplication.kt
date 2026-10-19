@@ -9,7 +9,7 @@ class FremApplication : Application() {
         FremRepository(
             this,
             Room.databaseBuilder(this, FremDatabase::class.java, "frem.db")
-                .addMigrations(FremDatabase.MIGRATION_1_2)
+                .addMigrations(FremDatabase.MIGRATION_1_2, FremDatabase.MIGRATION_2_3)
                 .build(),
             PreferencesStore(this),
         )

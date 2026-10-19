@@ -891,8 +891,8 @@ fun SettingsScreen(
         }
         item(key = "phone", contentType = "action") {
             SettingsAction(
-                "Phone recording fallback",
-                "Count steps with Google Play services on this phone",
+                "Phone steps & distance",
+                "Record steps and estimated distance with Google Play services",
                 Icons.AutoMirrored.Rounded.DirectionsWalk,
             ) {
                 onPhone()

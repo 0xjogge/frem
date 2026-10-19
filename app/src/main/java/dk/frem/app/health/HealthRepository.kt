@@ -1,8 +1,6 @@
 package dk.frem.app.health
 
 import android.content.Context
-import android.os.Build
-import android.os.ext.SdkExtensions
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.aggregate.AggregateMetric
@@ -38,11 +36,6 @@ class HealthRepository(private val context: Context) {
     @Volatile private var cachedClient: HealthConnectClient? = null
     val available: Boolean
         get() = HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE
-
-    val nativeStepsAvailable: Boolean
-        get() =
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-                SdkExtensions.getExtensionVersion(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) >= 20
 
     val client: HealthConnectClient?
         get() =
@@ -156,12 +149,13 @@ class HealthRepository(private val context: Context) {
                 )
         val recordedDays = rows.map { row ->
             val r = row.result
+            val distance =
+                if (can(DistanceRecord::class)) r[DistanceRecord.DISTANCE_TOTAL]?.inMeters else null
             DaySummary(
                 date = row.startTime.toLocalDate().toString(),
                 steps = if (can(StepsRecord::class)) r[StepsRecord.COUNT_TOTAL] else null,
-                distance =
-                    if (can(DistanceRecord::class)) r[DistanceRecord.DISTANCE_TOTAL]?.inMeters
-                    else null,
+                distance = distance,
+                distanceSource = if (distance != null) "Health Connect" else null,
                 activeCalories =
                     if (can(ActiveCaloriesBurnedRecord::class))
                         r[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
