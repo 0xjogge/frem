@@ -249,9 +249,10 @@ fun HistoryChart(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     line: Boolean = false,
-    onSelect: (Int) -> Unit = {},
+    onSelect: ((Int) -> Unit)? = null,
 ) {
     val track = MaterialTheme.colorScheme.outlineVariant
+    val selection by rememberUpdatedState(onSelect)
     val valid = remember(points) { points.mapNotNull { it.second } }
     if (valid.isEmpty()) {
         Box(
@@ -293,14 +294,20 @@ fun HistoryChart(
                 .height(155.dp)
                 .testTag("history_chart")
                 .semantics { contentDescription = description }
-                .pointerInput(points) {
-                    detectTapGestures { p ->
-                        if (points.isNotEmpty())
-                            onSelect(
-                                (p.x / size.width * points.size).toInt().coerceIn(points.indices),
-                            )
-                    }
-                },
+                .then(
+                    if (onSelect == null) Modifier
+                    else
+                        Modifier.pointerInput(points) {
+                            detectTapGestures { p ->
+                                if (points.isNotEmpty() && size.width > 0)
+                                    selection?.invoke(
+                                        (p.x / size.width * points.size)
+                                            .toInt()
+                                            .coerceIn(points.indices),
+                                    )
+                            }
+                        },
+                ),
         ) {
             for (i in 0..3) {
                 val y = size.height * i / 3
