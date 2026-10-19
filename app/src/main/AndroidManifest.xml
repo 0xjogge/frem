@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -35,6 +37,8 @@
         android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:theme="@style/Theme.Frem" android:supportsRtl="true" android:enableOnBackInvokedCallback="true">
         <service android:name=".recording.RecordingService" android:exported="false"
             android:foregroundServiceType="location|health" android:stopWithTask="false" />
+        <service android:name=".hearing.NoiseService" android:exported="false"
+            android:foregroundServiceType="microphone" android:stopWithTask="false" />
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>

@@ -3,6 +3,7 @@ package dk.frem.app
 import android.app.Application
 import androidx.room.Room
 import dk.frem.app.data.*
+import dk.frem.app.hearing.NoiseRepository
 import dk.frem.app.recording.RecordingRepository
 
 class FremApplication : Application() {
@@ -15,11 +16,13 @@ class FremApplication : Application() {
                 FremDatabase.MIGRATION_4_5,
                 FremDatabase.MIGRATION_5_6,
                 FremDatabase.MIGRATION_6_7,
+                FremDatabase.MIGRATION_7_8,
             )
             .build()
     }
 
     val recording: RecordingRepository by lazy { RecordingRepository(this, database) }
+    val noise: NoiseRepository by lazy { NoiseRepository(this, database) }
 
     val repository: FremRepository by lazy {
         FremRepository(

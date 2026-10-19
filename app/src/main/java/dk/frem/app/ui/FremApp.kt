@@ -103,6 +103,8 @@ fun FremApp(vm: FremViewModel) {
     val activeRecording by vm.activeRecording.collectAsStateWithLifecycle()
     val recordingLive by vm.recordingLive.collectAsStateWithLifecycle()
     val nativeMetrics by vm.nativeMetrics.collectAsStateWithLifecycle()
+    val noiseSessions by vm.noiseSessions.collectAsStateWithLifecycle()
+    val noiseLive by vm.noiseLive.collectAsStateWithLifecycle()
     val recordingBusy by vm.recordingBusy.collectAsStateWithLifecycle()
     val recordingDestination by vm.recordingDestination.collectAsStateWithLifecycle()
     val recordingMessage by vm.recordingMessage.collectAsStateWithLifecycle()
@@ -183,6 +185,7 @@ fun FremApp(vm: FremViewModel) {
         navigation.navigate(FremDestination.ACTIVITY_DETAIL)
     }
     var metric by remember { mutableStateOf<Metric?>(null) }
+    var hearingSheet by rememberSaveable { mutableStateOf(false) }
     var logging by remember { mutableStateOf<LogKind?>(null) }
     var editing by remember { mutableStateOf<LogEntry?>(null) }
     var connectionSheet by remember { mutableStateOf(false) }
@@ -212,6 +215,31 @@ fun FremApp(vm: FremViewModel) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
+    val noisePermissions =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            if (
+                context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                    PackageManager.PERMISSION_GRANTED
+            )
+                vm.noiseAction { vm.noise.start() }
+            else vm.message.value = "Allow microphone access to measure environmental noise."
+        }
+    fun startNoise() {
+        if (
+            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+            vm.noiseAction { vm.noise.start() }
+        else
+            noisePermissions.launch(
+                if (Build.VERSION.SDK_INT >= 33)
+                    arrayOf(
+                        Manifest.permission.RECORD_AUDIO,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    )
+                else arrayOf(Manifest.permission.RECORD_AUDIO),
+            )
+    }
     var pendingActivityType by rememberSaveable { mutableStateOf<ActivityType?>(null) }
     var pendingRecordingResume by rememberSaveable { mutableStateOf(false) }
     var recordingPermissionHelp by rememberSaveable { mutableStateOf(false) }
@@ -393,6 +421,7 @@ fun FremApp(vm: FremViewModel) {
                                     nights,
                                     recordedActivities,
                                     nativeMetrics,
+                                    noiseSessions,
                                 )
                             val output =
                                 context.contentResolver.openOutputStream(uri)
@@ -669,6 +698,7 @@ fun FremApp(vm: FremViewModel) {
                                     logging = it.logKind
                                 },
                                 onDelete = { deleteEntry = it },
+                                onHearing = { hearingSheet = true },
                             )
                         FremDestination.PRIVACY -> PrivacyScreen(onDone = navigation::goBack)
                         FremDestination.SETTINGS ->
@@ -838,6 +868,20 @@ fun FremApp(vm: FremViewModel) {
                 )
             }
         }
+        if (hearingSheet)
+            ModalBottomSheet(
+                onDismissRequest = { hearingSheet = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            ) {
+                HearingScreen(
+                    noiseSessions,
+                    noiseLive,
+                    ::startNoise,
+                    { vm.noise.stop() },
+                    { reference -> vm.noiseAction { vm.noise.calibrate(reference) } },
+                    { id -> vm.noiseAction { vm.noise.delete(id) } },
+                )
+            }
         logging?.let { kind ->
             LogDialog(
                 kind,

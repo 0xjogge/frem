@@ -1,6 +1,9 @@
 package dk.frem.app.data
 
 import androidx.room.*
+import dk.frem.app.hearing.NoiseCalibration
+import dk.frem.app.hearing.NoiseDao
+import dk.frem.app.hearing.NoiseSession
 import dk.frem.app.recording.ActivityDayMetrics
 import dk.frem.app.recording.ActivitySession
 import dk.frem.app.recording.RecordingDao
@@ -72,8 +75,10 @@ interface FremDao {
             ActivitySession::class,
             TrackPoint::class,
             ActivityDayMetrics::class,
+            NoiseSession::class,
+            NoiseCalibration::class,
         ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class FremDatabase : RoomDatabase() {
@@ -81,7 +86,33 @@ abstract class FremDatabase : RoomDatabase() {
 
     abstract fun recordingDao(): RecordingDao
 
+    abstract fun noiseDao(): NoiseDao
+
     companion object {
+        val MIGRATION_7_8 =
+            object : androidx.room.migration.Migration(7, 8) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS noise_sessions (
+                                            id TEXT NOT NULL PRIMARY KEY, start INTEGER NOT NULL, end INTEGER, state TEXT NOT NULL,
+                                            inputKey TEXT, calibrationOffsetDb REAL, measuredMillis INTEGER NOT NULL,
+                                            energyMillis REAL NOT NULL, maximumDbfs REAL, unmeasuredMillis INTEGER NOT NULL,
+                                            doseFraction REAL NOT NULL)
+                        """
+                            .trimIndent(),
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS noise_calibrations (
+                                            inputKey TEXT NOT NULL PRIMARY KEY, offsetDb REAL NOT NULL,
+                                            referenceDb REAL NOT NULL, calibratedAt INTEGER NOT NULL)
+                        """
+                            .trimIndent(),
+                    )
+                }
+            }
+
         val MIGRATION_6_7 =
             object : androidx.room.migration.Migration(6, 7) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

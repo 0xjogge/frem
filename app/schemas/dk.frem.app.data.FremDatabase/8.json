@@ -1,0 +1,712 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 8,
+    "identityHash": "33047913fd6c2e38dfcb3f01b0e02552",
+    "entities": [
+      {
+        "tableName": "entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `date` TEXT NOT NULL, `value` REAL NOT NULL, `zone` TEXT NOT NULL, `version` INTEGER NOT NULL, `source` TEXT NOT NULL, `healthId` TEXT, `syncState` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zone",
+            "columnName": "zone",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "healthId",
+            "columnName": "healthId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "days",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` TEXT NOT NULL, `steps` INTEGER, `distance` REAL, `activeCalories` REAL, `totalCalories` REAL, `floors` REAL, `elevation` REAL, `heartAverage` REAL, `heartMin` INTEGER, `heartMax` INTEGER, `restingHeart` INTEGER, `sleepMinutes` REAL, `waterMl` REAL, `activeMinutes` REAL, `cadence` REAL, `moderateMinutes` REAL, `vigorousMinutes` REAL, `intensityMinutes` INTEGER, `heartLatest` INTEGER, `heartLatestTime` INTEGER, `source` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, `distanceSource` TEXT, `elevationLost` REAL, PRIMARY KEY(`date`))",
+        "fields": [
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "steps",
+            "columnName": "steps",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "distance",
+            "columnName": "distance",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "activeCalories",
+            "columnName": "activeCalories",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalCalories",
+            "columnName": "totalCalories",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "floors",
+            "columnName": "floors",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "elevation",
+            "columnName": "elevation",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "heartAverage",
+            "columnName": "heartAverage",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "heartMin",
+            "columnName": "heartMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "heartMax",
+            "columnName": "heartMax",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "restingHeart",
+            "columnName": "restingHeart",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sleepMinutes",
+            "columnName": "sleepMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "waterMl",
+            "columnName": "waterMl",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "activeMinutes",
+            "columnName": "activeMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "cadence",
+            "columnName": "cadence",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "moderateMinutes",
+            "columnName": "moderateMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "vigorousMinutes",
+            "columnName": "vigorousMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "intensityMinutes",
+            "columnName": "intensityMinutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "heartLatest",
+            "columnName": "heartLatest",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "heartLatestTime",
+            "columnName": "heartLatestTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceSource",
+            "columnName": "distanceSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "elevationLost",
+            "columnName": "elevationLost",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "date"
+          ]
+        }
+      },
+      {
+        "tableName": "workouts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `type` INTEGER NOT NULL, `start` INTEGER NOT NULL, `end` INTEGER NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "sleep",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `start` INTEGER NOT NULL, `end` INTEGER NOT NULL, `asleepMinutes` REAL NOT NULL, `deepMinutes` REAL, `remMinutes` REAL, `lightMinutes` REAL, `awakeMinutes` REAL, `source` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "asleepMinutes",
+            "columnName": "asleepMinutes",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deepMinutes",
+            "columnName": "deepMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "remMinutes",
+            "columnName": "remMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lightMinutes",
+            "columnName": "lightMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "awakeMinutes",
+            "columnName": "awakeMinutes",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "activity_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `type` TEXT NOT NULL, `start` INTEGER NOT NULL, `end` INTEGER, `zoneId` TEXT NOT NULL, `state` TEXT NOT NULL, `distanceMeters` REAL NOT NULL, `durationMillis` INTEGER NOT NULL, `ascentMeters` REAL, `lastCheckpoint` INTEGER NOT NULL, `activeSlot` INTEGER, `descentMeters` REAL, `elevationSource` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "zoneId",
+            "columnName": "zoneId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceMeters",
+            "columnName": "distanceMeters",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMillis",
+            "columnName": "durationMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ascentMeters",
+            "columnName": "ascentMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lastCheckpoint",
+            "columnName": "lastCheckpoint",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeSlot",
+            "columnName": "activeSlot",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "descentMeters",
+            "columnName": "descentMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "elevationSource",
+            "columnName": "elevationSource",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_activity_sessions_activeSlot",
+            "unique": true,
+            "columnNames": [
+              "activeSlot"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_activity_sessions_activeSlot` ON `${TABLE_NAME}` (`activeSlot`)"
+          }
+        ]
+      },
+      {
+        "tableName": "track_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sessionId` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `segment` INTEGER NOT NULL, `recordedAt` INTEGER NOT NULL, `elapsedRealtimeNanos` INTEGER NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `accuracyMeters` REAL NOT NULL, `altitudeMeters` REAL, `speedMetersPerSecond` REAL, PRIMARY KEY(`sessionId`, `sequence`), FOREIGN KEY(`sessionId`) REFERENCES `activity_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "segment",
+            "columnName": "segment",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "elapsedRealtimeNanos",
+            "columnName": "elapsedRealtimeNanos",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accuracyMeters",
+            "columnName": "accuracyMeters",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "altitudeMeters",
+            "columnName": "altitudeMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "speedMetersPerSecond",
+            "columnName": "speedMetersPerSecond",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sessionId",
+            "sequence"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "activity_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "activity_day_metrics",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sessionId` TEXT NOT NULL, `date` TEXT NOT NULL, `steps` INTEGER, `cadenceSteps` REAL NOT NULL, `cadenceMillis` INTEGER NOT NULL, `moderateMillis` INTEGER NOT NULL, `vigorousMillis` INTEGER NOT NULL, `ascentMeters` REAL, `descentMeters` REAL, `floorAscentMeters` REAL, `elevationSource` TEXT, PRIMARY KEY(`sessionId`, `date`), FOREIGN KEY(`sessionId`) REFERENCES `activity_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "steps",
+            "columnName": "steps",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cadenceSteps",
+            "columnName": "cadenceSteps",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cadenceMillis",
+            "columnName": "cadenceMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moderateMillis",
+            "columnName": "moderateMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vigorousMillis",
+            "columnName": "vigorousMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ascentMeters",
+            "columnName": "ascentMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "descentMeters",
+            "columnName": "descentMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "floorAscentMeters",
+            "columnName": "floorAscentMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "elevationSource",
+            "columnName": "elevationSource",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sessionId",
+            "date"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "activity_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "noise_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `start` INTEGER NOT NULL, `end` INTEGER, `state` TEXT NOT NULL, `inputKey` TEXT, `calibrationOffsetDb` REAL, `measuredMillis` INTEGER NOT NULL, `energyMillis` REAL NOT NULL, `maximumDbfs` REAL, `unmeasuredMillis` INTEGER NOT NULL, `doseFraction` REAL NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "start",
+            "columnName": "start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "end",
+            "columnName": "end",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inputKey",
+            "columnName": "inputKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "calibrationOffsetDb",
+            "columnName": "calibrationOffsetDb",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "measuredMillis",
+            "columnName": "measuredMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "energyMillis",
+            "columnName": "energyMillis",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maximumDbfs",
+            "columnName": "maximumDbfs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "unmeasuredMillis",
+            "columnName": "unmeasuredMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "doseFraction",
+            "columnName": "doseFraction",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "noise_calibrations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`inputKey` TEXT NOT NULL, `offsetDb` REAL NOT NULL, `referenceDb` REAL NOT NULL, `calibratedAt` INTEGER NOT NULL, PRIMARY KEY(`inputKey`))",
+        "fields": [
+          {
+            "fieldPath": "inputKey",
+            "columnName": "inputKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offsetDb",
+            "columnName": "offsetDb",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referenceDb",
+            "columnName": "referenceDb",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calibratedAt",
+            "columnName": "calibratedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "inputKey"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '33047913fd6c2e38dfcb3f01b0e02552')"
+    ]
+  }
+}

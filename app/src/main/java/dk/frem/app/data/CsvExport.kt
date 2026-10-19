@@ -1,5 +1,6 @@
 package dk.frem.app.data
 
+import dk.frem.app.hearing.NoiseSession
 import dk.frem.app.recording.ActivityDayMetrics
 import dk.frem.app.recording.ActivitySession
 import dk.frem.app.recording.RecordingState
@@ -14,6 +15,7 @@ object CsvExport {
         nights: List<SleepNight>,
         recordedActivities: List<ActivitySession> = emptyList(),
         nativeActivityMetrics: List<ActivityDayMetrics> = emptyList(),
+        noiseSessions: List<NoiseSession> = emptyList(),
     ): String {
         fun escape(value: Any?): String =
             value?.toString()?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
@@ -182,6 +184,45 @@ object CsvExport {
                         )
                 }
         }
+        noiseSessions
+            .filter { it.state != "RECORDING" }
+            .forEach { session ->
+                listOf(
+                        Triple("environmental_noise_leq", session.leqDbA, "dB(A)"),
+                        Triple(
+                            "environmental_noise_uncalibrated",
+                            session.rawLeq.takeIf { session.calibrationOffsetDb == null },
+                            "dBFS(A)",
+                        ),
+                        Triple(
+                            "environmental_noise_measured_seconds",
+                            session.measuredMillis / 1000.0,
+                            "s",
+                        ),
+                        Triple(
+                            "environmental_noise_unmeasured_seconds",
+                            session.unmeasuredMillis / 1000.0,
+                            "s",
+                        ),
+                        Triple("environmental_noise_dose", session.dosePercent, "%"),
+                    )
+                    .filter { it.second != null }
+                    .forEach { (type, value, unit) ->
+                        rows +=
+                            listOf(
+                                type,
+                                Instant.ofEpochMilli(session.start)
+                                    .atZone(ZoneId.systemDefault())
+                                    .toLocalDate(),
+                                Instant.ofEpochMilli(session.start),
+                                session.end?.let(Instant::ofEpochMilli),
+                                value,
+                                unit,
+                                "Frem microphone",
+                                "session=${session.id};state=${session.state};input=${session.inputKey};calibration_offset_db=${session.calibrationOffsetDb};reference=85dBA/8h/3dB;coverage=measured intervals",
+                            )
+                    }
+            }
         return rows.joinToString("\r\n", postfix = "\r\n") { row ->
             row.joinToString(",", transform = ::escape)
         }

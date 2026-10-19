@@ -20,6 +20,23 @@ import kotlinx.coroutines.launch
 class FremViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as FremApplication).repository
     val recording = (application as FremApplication).recording
+    val noise = (application as FremApplication).noise
+    val noiseSessions =
+        noise.sessions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val noiseLive = noise.live
+
+    fun noiseAction(action: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                action()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message.value = e.message ?: "Noise measurement failed."
+            }
+        }
+    }
+
     val recordedActivities =
         recording.sessions.stateIn(
             viewModelScope,

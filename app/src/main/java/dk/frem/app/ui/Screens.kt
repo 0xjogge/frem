@@ -610,6 +610,7 @@ fun HealthScreen(
     onLog: (LogKind) -> Unit,
     onEdit: (LogEntry) -> Unit,
     onDelete: (LogEntry) -> Unit,
+    onHearing: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     ObserveBenchmarkScroll("health_list", listState)
@@ -792,8 +793,10 @@ fun HealthScreen(
         item(key = "hearing", contentType = "info") {
             InfoCard(
                 "Hearing exposure",
-                "Android does not expose measured headphone sound dose to regular apps. Frem won’t turn a volume setting into an exposure reading.",
+                "Measure environmental noise in user-started sessions, calibrate your microphone, and review measured exposure. Headphone dose needs a supported data source.",
                 Icons.Rounded.Headphones,
+                "Measure & view history",
+                onHearing,
             )
         }
     }

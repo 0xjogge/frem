@@ -246,6 +246,47 @@ class CsvExportTest {
         )
     }
 
+    @Test
+    fun noiseExportsDoNotLabelUncalibratedLevelsAsSoundPressureOrDose() {
+        val raw =
+            dk.frem.app.hearing.NoiseSession(
+                "raw",
+                0,
+                state = "FINISHED",
+                measuredMillis = 1000,
+                energyMillis = 10.0,
+            )
+        val rows =
+            parseCsv(
+                    CsvExport.create(
+                        emptyList(),
+                        emptyList(),
+                        emptyList(),
+                        emptyList(),
+                        noiseSessions = listOf(raw),
+                    ),
+                )
+                .drop(1)
+        assertTrue(rows.any { it[0] == "environmental_noise_uncalibrated" && it[5] == "dBFS(A)" })
+        assertFalse(
+            rows.any { it[0] == "environmental_noise_leq" || it[0] == "environmental_noise_dose" },
+        )
+        val calibrated = raw.copy(calibrationOffsetDb = 100.0, doseFraction = .1)
+        val measured =
+            parseCsv(
+                    CsvExport.create(
+                        emptyList(),
+                        emptyList(),
+                        emptyList(),
+                        emptyList(),
+                        noiseSessions = listOf(calibrated),
+                    ),
+                )
+                .drop(1)
+        assertEquals("10.0", measured.single { it[0] == "environmental_noise_dose" }[4])
+        assertTrue(measured.all { it[7].contains("coverage=measured intervals") })
+    }
+
     /** Read CSV fields, including quoted CRLFs, instead of treating every line as a record. */
     private fun parseCsv(csv: String): List<List<String>> {
         val rows = mutableListOf<List<String>>()
