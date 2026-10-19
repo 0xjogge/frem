@@ -27,11 +27,6 @@ data class HealthImport(
     val permissions: Set<String>,
 )
 
-data class HealthCapabilities(
-    val available: Boolean = false,
-    val groups: Map<String, Set<String>> = emptyMap(),
-)
-
 class HealthRepository(private val context: Context) {
     @Volatile private var cachedClient: HealthConnectClient? = null
     val available: Boolean
@@ -42,41 +37,42 @@ class HealthRepository(private val context: Context) {
             if (!available) null
             else cachedClient ?: HealthConnectClient.getOrCreate(context).also { cachedClient = it }
 
-    val groups: Map<String, Set<String>>
+    val groups: Map<String, List<HealthDataType>>
         get() =
             linkedMapOf(
                     "Steps, distance & energy" to
-                        readPermissions(
-                            StepsRecord::class,
-                            StepsCadenceRecord::class,
-                            DistanceRecord::class,
-                            ActiveCaloriesBurnedRecord::class,
-                            TotalCaloriesBurnedRecord::class,
+                        listOf(
+                            dataType("Steps", StepsRecord::class),
+                            dataType("Step cadence", StepsCadenceRecord::class),
+                            dataType("Distance", DistanceRecord::class),
+                            dataType("Active energy", ActiveCaloriesBurnedRecord::class),
+                            dataType("Total energy", TotalCaloriesBurnedRecord::class),
                         ),
                     "Floors & elevation" to
-                        readPermissions(FloorsClimbedRecord::class, ElevationGainedRecord::class),
+                        listOf(
+                            dataType("Floors climbed", FloorsClimbedRecord::class),
+                            dataType("Elevation gained", ElevationGainedRecord::class),
+                        ),
                     "Weight & body measurements" to
-                        (readPermissions(
-                            WeightRecord::class,
-                            HeightRecord::class,
-                            BodyFatRecord::class,
-                        ) +
-                            writePermissions(
-                                WeightRecord::class,
-                                HeightRecord::class,
-                                BodyFatRecord::class,
-                            )),
+                        listOf(
+                            dataType("Weight", WeightRecord::class, share = true),
+                            dataType("Height", HeightRecord::class, share = true),
+                            dataType("Body fat", BodyFatRecord::class, share = true),
+                        ),
                     "Hydration" to
-                        (readPermissions(HydrationRecord::class) +
-                            writePermissions(HydrationRecord::class)),
-                    "Sleep" to readPermissions(SleepSessionRecord::class),
+                        listOf(dataType("Water entries", HydrationRecord::class, share = true)),
+                    "Sleep" to listOf(dataType("Sleep", SleepSessionRecord::class)),
                     "Heart rate" to
-                        readPermissions(HeartRateRecord::class, RestingHeartRateRecord::class),
-                    "Workouts" to readPermissions(ExerciseSessionRecord::class),
+                        listOf(
+                            dataType("Heart rate", HeartRateRecord::class),
+                            dataType("Resting heart rate", RestingHeartRateRecord::class),
+                        ),
+                    "Workouts" to listOf(dataType("Workouts", ExerciseSessionRecord::class)),
                 )
                 .also {
                     if (feature(HealthConnectFeatures.FEATURE_ACTIVITY_INTENSITY))
-                        it["Activity intensity"] = readPermissions(ActivityIntensityRecord::class)
+                        it["Activity intensity"] =
+                            listOf(dataType("Activity intensity", ActivityIntensityRecord::class))
                 }
 
     fun feature(id: Int): Boolean =
@@ -95,11 +91,12 @@ class HealthRepository(private val context: Context) {
     suspend fun permissions(): Set<String> =
         client?.permissionController?.getGrantedPermissions() ?: emptySet()
 
-    private fun readPermissions(vararg types: KClass<out Record>) =
-        types.map { HealthPermission.getReadPermission(it) }.toSet()
-
-    private fun writePermissions(vararg types: KClass<out Record>) =
-        types.map { HealthPermission.getWritePermission(it) }.toSet()
+    private fun dataType(name: String, type: KClass<out Record>, share: Boolean = false) =
+        HealthDataType(
+            name,
+            HealthPermission.getReadPermission(type),
+            if (share) HealthPermission.getWritePermission(type) else null,
+        )
 
     suspend fun import(): HealthImport {
         val hc =

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +78,7 @@ fun FremApp(vm: FremViewModel) {
     val nights by vm.nights.collectAsStateWithLifecycle()
     val hours by vm.hours.collectAsStateWithLifecycle()
     val granted by vm.granted.collectAsStateWithLifecycle()
+    val permissionStatus by vm.permissionStatus.collectAsStateWithLifecycle()
     val sameTime by vm.sameTimeAverage.collectAsStateWithLifecycle()
     val notificationsAllowed by vm.notificationsAllowed.collectAsStateWithLifecycle()
     val capabilities by vm.healthCapabilities.collectAsStateWithLifecycle()
@@ -128,12 +130,17 @@ fun FremApp(vm: FremViewModel) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
     val health = vm.repository.health
+    var requestingBackground by rememberSaveable { mutableStateOf(false) }
     val permissions =
         rememberLauncherForActivityResult(
             PermissionController.createRequestPermissionResultContract(),
         ) { allowed ->
-            if (HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in allowed)
+            if (
+                requestingBackground &&
+                    HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in allowed
+            )
                 vm.flag("background", true)
+            requestingBackground = false
             vm.refresh()
         }
     val activityPermission =
@@ -212,27 +219,35 @@ fun FremApp(vm: FremViewModel) {
                 }
         }
     fun request(set: Set<String>) {
-        if (health.available && set.isNotEmpty()) permissions.launch(set)
-        else
+        if (health.available && set.isNotEmpty()) {
+            requestingBackground = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in set
+            permissions.launch(set)
+        } else
             vm.message.value =
                 "This Health Connect feature is unavailable on your device. Check for Android system updates."
     }
     fun openHealthSettings() {
-        val intent = Intent("android.health.connect.action.HEALTH_CONNECT_SETTINGS")
-        try {
-            context.startActivity(intent)
-        } catch (_: Exception) {
+        val intents =
+            listOf(
+                Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
+                    .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName),
+                Intent("android.health.connect.action.HEALTH_CONNECT_SETTINGS"),
+                Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS")
+                    .setPackage("com.google.android.apps.healthdata"),
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=com.google.android.apps.healthdata"),
+                ),
+            )
+        for (intent in intents) {
             try {
-                context.startActivity(
-                    Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("market://details?id=com.google.android.apps.healthdata"),
-                    ),
-                )
+                context.startActivity(intent)
+                return
             } catch (_: Exception) {
-                vm.message.value = "Open Health Connect from Android settings."
+                // Older Android versions use the Health Connect app instead of system settings.
             }
         }
+        vm.message.value = "Open Health Connect from Android settings."
     }
     LaunchedEffect(message) {
         message?.let {
@@ -347,6 +362,7 @@ fun FremApp(vm: FremViewModel) {
                                 preferences,
                                 granted,
                                 capabilities,
+                                permissionStatus,
                                 vm,
                                 notificationsAllowed = notificationsAllowed,
                                 onReminder = { kind, enabled ->
@@ -378,72 +394,14 @@ fun FremApp(vm: FremViewModel) {
             }
         }
         if (connectionSheet) {
-            var selected by
-                remember(capabilities.groups) { mutableStateOf(capabilities.groups.keys.toSet()) }
-            ModalBottomSheet(
-                onDismissRequest = { connectionSheet = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            ) {
-                LazyColumn(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp).navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    item {
-                        Text("Connect your health", style = MaterialTheme.typography.headlineMedium)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Choose what Frem can read. Body and water entries can also sync back to Health Connect.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    items(
-                        capabilities.groups.keys.toList(),
-                        key = { it },
-                        contentType = { "permission" },
-                    ) { name ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                name in selected,
-                                onCheckedChange = {
-                                    selected = if (it) selected + name else selected - name
-                                },
-                            )
-                            Text(
-                                name,
-                                Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                    }
-                    item {
-                        Button(
-                            onClick = {
-                                connectionSheet = false
-                                request(
-                                    selected.flatMap { capabilities.groups[it].orEmpty() }.toSet(),
-                                )
-                            },
-                            enabled = selected.isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Continue to Health Connect")
-                        }
-                        TextButton(
-                            onClick = {
-                                connectionSheet = false
-                                enablePhoneRecording()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Enable phone steps & distance")
-                        }
-                        Spacer(Modifier.height(20.dp))
-                    }
-                }
-            }
+            HealthConnectionSheet(
+                capabilities,
+                granted,
+                onDismiss = { connectionSheet = false },
+                onRequest = ::request,
+                onHealthSettings = ::openHealthSettings,
+                onPhone = ::enablePhoneRecording,
+            )
         }
         metric?.let { selected ->
             ModalBottomSheet(

@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.room.withTransaction
 import dk.frem.app.domain.mergePhoneActivity
 import dk.frem.app.domain.retainOlderPhoneDistance
+import dk.frem.app.health.HealthPermissionStatus
 import dk.frem.app.health.HealthRepository
 import dk.frem.app.health.PhoneRecorder
 import dk.frem.app.widget.StepsWidget
@@ -31,6 +32,7 @@ class FremRepository(
     val hours = MutableStateFlow<List<HourSteps>>(emptyList())
     val sameTimeAverage = MutableStateFlow<Long?>(null)
     val granted = MutableStateFlow<Set<String>>(emptySet())
+    val permissionStatus = MutableStateFlow(HealthPermissionStatus.CHECKING)
     val refreshing = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
     private val lock = Mutex()
@@ -99,8 +101,17 @@ class FremRepository(
             lock.withLock {
                 refreshing.value = true
                 try {
-                    val allowed = health.permissions()
+                    val allowed =
+                        try {
+                            health.permissions()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            permissionStatus.value = HealthPermissionStatus.ERROR
+                            throw e
+                        }
                     granted.value = allowed
+                    permissionStatus.value = HealthPermissionStatus.READY
                     if (
                         background &&
                             HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in allowed

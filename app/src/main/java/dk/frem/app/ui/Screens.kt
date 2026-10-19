@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import dk.frem.app.data.*
 import dk.frem.app.domain.Insights
 import dk.frem.app.health.HealthCapabilities
+import dk.frem.app.health.HealthPermissionStatus
 import dk.frem.app.performance.ObserveBenchmarkScroll
 import java.time.*
 
@@ -707,6 +708,7 @@ fun SettingsScreen(
     preferences: Preferences,
     granted: Set<String>,
     capabilities: HealthCapabilities,
+    permissionStatus: HealthPermissionStatus,
     vm: FremViewModel,
     notificationsAllowed: Boolean,
     onReminder: (ReminderKind, Boolean) -> Unit,
@@ -832,62 +834,18 @@ fun SettingsScreen(
                 Text("Send a reminder preview")
             }
         }
-        item(key = "health-connect", contentType = "section") {
-            SettingsSectionTitle(
-                "Health Connect",
-                if (capabilities.available) "Available on this phone"
-                else "Not available on this phone",
-            )
-        }
-        item(key = "connect", contentType = "button") {
-            Button(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Link, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Connect health data")
-            }
-        }
-        items(
-            capabilities.groups.entries.toList(),
-            key = { "permission-${it.key}" },
-            contentType = { "action" },
-        ) { (name, permissions) ->
-            val count = permissions.count { it in granted }
-            SettingsAction(
-                name,
-                if (count == 0) "Not connected"
-                else "$count of ${permissions.size} permissions granted",
-                Icons.Rounded.HealthAndSafety,
-            ) {
-                if (count == permissions.size) onHealthSettings() else onRequest(permissions)
-            }
-        }
-        item(key = "background", contentType = "switch") {
-            SettingsSwitch(
-                "Background updates",
-                "Refresh about every 30 minutes when Android permits",
-                preferences.backgroundSync,
-            ) { enabled ->
-                if (!enabled) vm.flag("background", false)
-                else onRequest(vm.repository.health.backgroundPermission())
-            }
-        }
-        item(key = "history", contentType = "action") {
-            SettingsAction(
-                "Read older history",
-                "Allow access beyond the default 30-day window",
-                Icons.Rounded.History,
-            ) {
-                onRequest(vm.repository.health.historyPermission())
-            }
-        }
-        item(key = "manage", contentType = "action") {
-            SettingsAction(
-                "Manage Health Connect",
-                "Permissions, sources, and stored records",
-                Icons.Rounded.Settings,
-            ) {
-                onHealthSettings()
-            }
+        healthConnectSettings(
+            preferences,
+            granted,
+            capabilities,
+            permissionStatus,
+            onBackgroundChange = { vm.flag("background", it) },
+            onConnect,
+            onRequest,
+            onHealthSettings,
+        )
+        item(key = "phone-title", contentType = "section") {
+            SettingsSectionTitle("Phone recording", "Separate from Health Connect")
         }
         item(key = "phone", contentType = "action") {
             SettingsAction(
@@ -965,10 +923,17 @@ private fun SettingsSectionTitle(title: String, subtitle: String? = null) {
 }
 
 @Composable
-fun SettingsAction(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+fun SettingsAction(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Card(
         onClick,
         Modifier.fillMaxWidth(),
+        enabled = enabled,
         colors =
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
@@ -988,7 +953,13 @@ fun SettingsAction(title: String, subtitle: String, icon: ImageVector, onClick: 
 }
 
 @Composable
-fun SettingsSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+fun SettingsSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
@@ -1001,6 +972,7 @@ fun SettingsSwitch(title: String, subtitle: String, checked: Boolean, onChange: 
         Switch(
             checked,
             onCheckedChange = onChange,
+            enabled = enabled,
             modifier = Modifier.semantics { contentDescription = title },
         )
     }

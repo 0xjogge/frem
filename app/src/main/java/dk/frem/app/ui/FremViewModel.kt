@@ -43,6 +43,7 @@ class FremViewModel(application: Application) : AndroidViewModel(application) {
     val refreshing = repository.refreshing
     val message = repository.message
     val granted = repository.granted
+    val permissionStatus = repository.permissionStatus
     val hours = repository.hours
     val sameTimeAverage = repository.sameTimeAverage
     val notificationsAllowed = MutableStateFlow(ReminderNotifications.allowed(application))
@@ -56,7 +57,13 @@ class FremViewModel(application: Application) : AndroidViewModel(application) {
     fun updateCapabilities() {
         viewModelScope.launch(Dispatchers.IO) {
             healthCapabilities.value =
-                HealthCapabilities(repository.health.available, repository.health.groups)
+                HealthCapabilities(
+                    available = repository.health.available,
+                    groups = repository.health.groups,
+                    backgroundPermission = repository.health.backgroundPermission(),
+                    historyPermission = repository.health.historyPermission(),
+                    loaded = true,
+                )
         }
     }
 
