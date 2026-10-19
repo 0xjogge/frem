@@ -193,6 +193,44 @@ class CsvExportTest {
         }
     }
 
+    @Test
+    fun nativeSubtotalsAreExportedWithTheirScopeWithoutAlteringImportedTotals() {
+        val native =
+            dk.frem.app.recording.ActivityDayMetrics(
+                "walk",
+                "2026-10-19",
+                steps = 120,
+                cadenceSteps = 120.0,
+                cadenceMillis = 60_000,
+                moderateMillis = 30_000,
+                ascentMeters = 9.0,
+                descentMeters = 3.0,
+                floorAscentMeters = 6.0,
+                elevationSource = "Barometer",
+            )
+        val rows =
+            parseCsv(
+                    CsvExport.create(
+                        emptyList(),
+                        listOf(DaySummary(native.date, floors = 0.0)),
+                        emptyList(),
+                        emptyList(),
+                        nativeActivityMetrics = listOf(native),
+                    ),
+                )
+                .drop(1)
+        assertEquals("0.0", rows.single { it[0] == "floors" }[4])
+        assertEquals("2.0", rows.single { it[0] == "recorded_floors" }[4])
+        assertEquals("120.0", rows.single { it[0] == "recorded_cadence" }[4])
+        assertTrue(
+            rows
+                .filter { it[0].startsWith("recorded_") }
+                .all {
+                    it[6] == "Recorded with Frem" && it[7].contains("coverage=recorded activities")
+                },
+        )
+    }
+
     private fun finishedSession(): ActivitySession {
         val start = Instant.parse("2026-10-18T23:30:00.125Z").toEpochMilli()
         return ActivitySession(

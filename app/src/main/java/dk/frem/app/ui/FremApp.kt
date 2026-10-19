@@ -37,6 +37,7 @@ import dk.frem.app.BuildConfig
 import dk.frem.app.data.*
 import dk.frem.app.domain.Insights
 import dk.frem.app.domain.ReminderMessage
+import dk.frem.app.domain.recordedActivityDays
 import dk.frem.app.maps.MapCache
 import dk.frem.app.performance.FrameDiagnostics
 import dk.frem.app.performance.ObserveBenchmarkScroll
@@ -62,8 +63,26 @@ data class AppData(
     val sameTimeAverage: Long?,
     val today: LocalDate,
     val recordedActivities: List<ActivitySession> = emptyList(),
+    val nativeMetrics: List<ActivityDayMetrics> = emptyList(),
 ) {
-    val day: DaySummary? by lazy { days.find { it.date == today.toString() } }
+    val recordedDays by lazy { recordedActivityDays(days, nativeMetrics) }
+    val activityDays: List<DaySummary>
+        get() = recordedDays.days
+
+    val day: DaySummary? by lazy { activityDays.find { it.date == today.toString() } }
+
+    fun nativeSource(metric: Metric, date: LocalDate): String? =
+        recordedDays.nativeSources[date.toString()]?.get(
+            when (metric) {
+                Metric.CADENCE -> "cadence"
+                Metric.ACTIVE_MINUTES -> "active_minutes"
+                Metric.FLOORS -> "floors"
+                Metric.ELEVATION -> "elevation"
+                Metric.DESCENT -> "elevation_lost"
+                else -> ""
+            },
+        )
+
     val latestWeight: LogEntry? by lazy { entries.firstOrNull { it.kind == LogKind.WEIGHT.name } }
     val waterToday: Double? by lazy {
         entries
@@ -110,6 +129,7 @@ fun FremApp(vm: FremViewModel) {
             sameTime,
             today,
             recordedActivities,
+            nativeMetrics,
         ) {
             AppData(
                 days,
@@ -122,6 +142,7 @@ fun FremApp(vm: FremViewModel) {
                 sameTime,
                 today,
                 recordedActivities,
+                nativeMetrics,
             )
         }
     val fixture =
@@ -371,6 +392,7 @@ fun FremApp(vm: FremViewModel) {
                                     workouts,
                                     nights,
                                     recordedActivities,
+                                    nativeMetrics,
                                 )
                             val output =
                                 context.contentResolver.openOutputStream(uri)
@@ -809,6 +831,10 @@ fun FremApp(vm: FremViewModel) {
                         connectionSheet = true
                     },
                     onPhone = ::enablePhoneRecording,
+                    onRecord = {
+                        metric = null
+                        openRecorder()
+                    },
                 )
             }
         }
@@ -1041,6 +1067,9 @@ fun TodayScreen(
                     Metric.FLOORS.value(data.day),
                     data.preferences,
                     Modifier.weight(1f),
+                    data.nativeSource(Metric.FLOORS, data.today)?.let {
+                        "Recorded activities · floors"
+                    },
                 ) {
                     onMetric(Metric.FLOORS)
                 }
@@ -1049,6 +1078,9 @@ fun TodayScreen(
                     Metric.ELEVATION.value(data.day),
                     data.preferences,
                     Modifier.weight(1f),
+                    data.nativeSource(Metric.ELEVATION, data.today)?.let {
+                        "Recorded activities · ${Metric.ELEVATION.unit(data.preferences)}"
+                    },
                 ) {
                     onMetric(Metric.ELEVATION)
                 }

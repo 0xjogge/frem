@@ -63,6 +63,7 @@ fun ActivityScreen(
                 Metric.ELEVATION,
                 Metric.ACTIVE_MINUTES,
                 Metric.CADENCE,
+                Metric.DESCENT,
             )
             .chunked(2)
     }
@@ -240,6 +241,10 @@ fun ActivityScreen(
                         metric.value(data.day),
                         data.preferences,
                         Modifier.weight(1f),
+                        subtitle =
+                            data.nativeSource(metric, data.today)?.let {
+                                "Recorded activities · ${metric.unit(data.preferences)}"
+                            },
                     ) {
                         onMetric(metric)
                     }

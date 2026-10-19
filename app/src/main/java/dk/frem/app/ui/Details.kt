@@ -31,6 +31,7 @@ fun MetricDetail(
     data: AppData,
     onConnect: () -> Unit,
     onPhone: () -> Unit = onConnect,
+    onRecord: (() -> Unit)? = null,
 ) {
     ObserveDialogFrames()
     val listState = rememberLazyListState()
@@ -51,7 +52,7 @@ fun MetricDetail(
             else -> 7
         }
     val start = end.minusDays(count.toLong() - 1)
-    val byDate = remember(data.days) { data.days.associateBy { it.date } }
+    val byDate = remember(data.activityDays) { data.activityDays.associateBy { it.date } }
     val waterByDate =
         remember(metric, data.entries) {
             if (metric != Metric.WATER) emptyMap()
@@ -143,7 +144,7 @@ fun MetricDetail(
         }
     val includesPhoneDistance =
         metric == Metric.DISTANCE &&
-            data.days.any {
+            data.activityDays.any {
                 it.localDate in start..end &&
                     it.distance != null &&
                     it.distanceSource == "Phone recording"
@@ -224,6 +225,8 @@ fun MetricDetail(
                                 includesPhoneDistance
                         )
                             "Estimated total"
+                        else if (daily.any { data.nativeSource(metric, it.first) != null })
+                            "Recorded activity subtotal"
                         else "Recorded total",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -259,16 +262,18 @@ fun MetricDetail(
                             "Health Connect may have steps without distance. Enable phone recording with physical activity access, or connect an app or watch that shares distance. Phone recording collects new data after it is enabled."
                         Metric.FLOORS,
                         Metric.ELEVATION ->
-                            "Frem imports these measurements from Health Connect. A compatible app or watch must record them."
+                            "Connect a source through Health Connect, or record an activity in Frem. Native floors need a barometer and detected steps. Elevation uses the barometer when available, with filtered GPS as a fallback."
+                        Metric.DESCENT ->
+                            "Record an activity in Frem to measure elevation lost. Health Connect elevation-gained records do not supply descent."
                         Metric.HEART,
                         Metric.RESTING_HEART ->
                             "Connect a compatible source that measures heart rate. Your phone doesn’t supply these readings automatically."
                         Metric.SLEEP ->
                             "A compatible app or watch must record sleep sessions and share them with Health Connect."
                         Metric.ACTIVE_MINUTES ->
-                            "Activity intensity needs a supported Health Connect version and a source that records it."
+                            "Connect a source sharing activity intensity, or record a walk/run with physical activity access. Frem estimates moderate/vigorous time from sustained step rate. Workout duration alone does not qualify."
                         Metric.CADENCE ->
-                            "Cadence is steps per minute. It appears when a source shares step-cadence records."
+                            "Connect a source sharing step cadence, or record a walk/run with physical activity access and a hardware step detector."
                         else ->
                             "Choose this data category in Health Connect and enable built-in tracking if your Android version supports it."
                     },
@@ -298,7 +303,7 @@ fun MetricDetail(
             }
         if (metric == Metric.ACTIVE_MINUTES)
             item(key = "intensity", contentType = "info") {
-                val period = data.days.filter { it.localDate in start..end }
+                val period = data.activityDays.filter { it.localDate in start..end }
                 fun total(read: (DaySummary) -> Double?) =
                     period.mapNotNull(read).takeIf { it.isNotEmpty() }?.sum()
                 InfoCard(
@@ -317,12 +322,38 @@ fun MetricDetail(
                     )
                 }
             }
+        if (
+            metric in
+                setOf(
+                    Metric.ACTIVE_MINUTES,
+                    Metric.CADENCE,
+                    Metric.FLOORS,
+                    Metric.ELEVATION,
+                    Metric.DESCENT,
+                )
+        )
+            item(key = "native-source", contentType = "info") {
+                InfoCard(
+                    "Measurements & coverage",
+                    "Health Connect values are preferred per metric and day, including zeroes. Otherwise Frem uses recorded activity measurements. Recording subtotals cover only those activities; they are never added to an overlapping Health Connect total. Native cadence is a moving-interval average; native active minutes are estimates. Missing measurements remain empty.",
+                    metric.icon,
+                    if (onRecord != null) "Record an activity" else null,
+                    onRecord,
+                )
+            }
         item(key = "daily-history", contentType = "section") { SectionTitle("Daily history") }
         items(historyRows, key = { "date-${it.first}" }, contentType = { "daily-value" }) {
-            (_, label, text) ->
+            (date, label, text) ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(text, style = MaterialTheme.typography.labelLarge)
+            }
+            data.nativeSource(metric, date)?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         if (metric == Metric.SLEEP) {

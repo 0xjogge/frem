@@ -32,6 +32,7 @@ enum class Metric(val title: String, val unit: String, val icon: ImageVector) {
     TOTAL_ENERGY("Total energy", "kcal", Icons.Rounded.Bolt),
     FLOORS("Floors climbed", "floors", Icons.Rounded.Stairs),
     ELEVATION("Elevation gained", "m", Icons.Rounded.Landscape),
+    DESCENT("Elevation lost", "m", Icons.Rounded.Landscape),
     ACTIVE_MINUTES("Active minutes", "min", Icons.Rounded.Timer),
     CADENCE("Step cadence", "steps/min", Icons.Rounded.Speed),
     HEART("Heart rate", "bpm", Icons.Rounded.Favorite),
@@ -47,6 +48,7 @@ enum class Metric(val title: String, val unit: String, val icon: ImageVector) {
             TOTAL_ENERGY -> day?.totalCalories
             FLOORS -> day?.floors
             ELEVATION -> day?.elevation
+            DESCENT -> day?.elevationLost
             ACTIVE_MINUTES -> day?.activeMinutes
             CADENCE -> day?.cadence
             HEART -> day?.heartAverage
@@ -59,7 +61,8 @@ enum class Metric(val title: String, val unit: String, val icon: ImageVector) {
         if (preferences.imperial)
             when (this) {
                 DISTANCE -> "mi"
-                ELEVATION -> "ft"
+                ELEVATION,
+                DESCENT -> "ft"
                 WATER -> "fl oz"
                 else -> unit
             }
@@ -70,7 +73,8 @@ enum class Metric(val title: String, val unit: String, val icon: ImageVector) {
         else
             when (this) {
                 DISTANCE -> it / 1.609344
-                ELEVATION -> it * 3.28084
+                ELEVATION,
+                DESCENT -> it * 3.28084
                 WATER -> it / 29.5735296
                 else -> it
             }

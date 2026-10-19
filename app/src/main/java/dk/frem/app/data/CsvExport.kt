@@ -1,5 +1,6 @@
 package dk.frem.app.data
 
+import dk.frem.app.recording.ActivityDayMetrics
 import dk.frem.app.recording.ActivitySession
 import dk.frem.app.recording.RecordingState
 import java.time.Instant
@@ -12,6 +13,7 @@ object CsvExport {
         workouts: List<Workout>,
         nights: List<SleepNight>,
         recordedActivities: List<ActivitySession> = emptyList(),
+        nativeActivityMetrics: List<ActivityDayMetrics> = emptyList(),
     ): String {
         fun escape(value: Any?): String =
             value?.toString()?.let { "\"${it.replace("\"", "\"\"")}\"" } ?: ""
@@ -50,6 +52,7 @@ object CsvExport {
                     Triple("total_energy", d.totalCalories, "kcal"),
                     Triple("floors", d.floors, "floors"),
                     Triple("elevation", d.elevation, "m"),
+                    Triple("elevation_lost", d.elevationLost, "m"),
                     Triple("heart_rate", d.heartAverage, "bpm"),
                     Triple("resting_heart_rate", d.restingHeart, "bpm"),
                     Triple("sleep", d.sleepMinutes, "min"),
@@ -116,6 +119,8 @@ object CsvExport {
                 val values =
                     listOf(
                         Triple("activity_distance", session.distanceMeters, "m"),
+                        Triple("activity_elevation_gained", session.ascentMeters, "m"),
+                        Triple("activity_elevation_lost", session.descentMeters, "m"),
                         Triple("activity_recording_seconds", session.durationMillis / 1_000.0, "s"),
                         Triple(
                             "activity_elapsed_seconds",
@@ -143,6 +148,40 @@ object CsvExport {
                             )
                     }
             }
+        nativeActivityMetrics.forEach { day ->
+            listOf(
+                    Triple("recorded_steps", day.steps?.toDouble(), "steps"),
+                    Triple("recorded_cadence", day.cadence, "steps/min"),
+                    Triple("recorded_active_minutes", day.activeMinutes, "min"),
+                    Triple(
+                        "recorded_moderate_minutes",
+                        if (day.cadenceMillis > 0) day.moderateMillis / 60_000.0 else null,
+                        "min",
+                    ),
+                    Triple(
+                        "recorded_vigorous_minutes",
+                        if (day.cadenceMillis > 0) day.vigorousMillis / 60_000.0 else null,
+                        "min",
+                    ),
+                    Triple("recorded_floors", day.floors, "floors"),
+                    Triple("recorded_elevation_gained", day.ascentMeters, "m"),
+                    Triple("recorded_elevation_lost", day.descentMeters, "m"),
+                )
+                .filter { it.second != null }
+                .forEach { (type, value, unit) ->
+                    rows +=
+                        listOf(
+                            type,
+                            day.date,
+                            null,
+                            null,
+                            value,
+                            unit,
+                            "Recorded with Frem",
+                            "session=${day.sessionId};coverage=recorded activities;intensity=estimated;cadence_moving_ms=${day.cadenceMillis};elevation_source=${day.elevationSource}",
+                        )
+                }
+        }
         return rows.joinToString("\r\n", postfix = "\r\n") { row ->
             row.joinToString(",", transform = ::escape)
         }

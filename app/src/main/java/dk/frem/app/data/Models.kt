@@ -61,6 +61,7 @@ data class DaySummary(
     val source: String = "Health Connect",
     val updatedAt: Long = System.currentTimeMillis(),
     val distanceSource: String? = null,
+    val elevationLost: Double? = null,
 ) {
     val localDate: LocalDate
         get() = LocalDate.parse(date)

@@ -14,6 +14,7 @@ class FremApplication : Application() {
                 FremDatabase.MIGRATION_3_4,
                 FremDatabase.MIGRATION_4_5,
                 FremDatabase.MIGRATION_5_6,
+                FremDatabase.MIGRATION_6_7,
             )
             .build()
     }
