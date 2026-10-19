@@ -734,7 +734,22 @@ class RecordingDeviceTest {
         // Compose can replace the semantics of a button without replacing its native host view.
         // Refresh the accessibility cache so Pause/Resume queries see the latest semantics.
         if (Build.VERSION.SDK_INT >= 33) automation.clearCache()
-        return automation.rootInActiveWindow?.find(predicate)
+        val root = automation.rootInActiveWindow ?: return null
+        // Some cold-booted Google APIs images show an unrelated Pixel Launcher ANR over the
+        // foreground activity. Dismiss only that launcher's dialog; a Frem ANR must still fail.
+        val launcherError = root.find {
+            it.viewIdResourceName == "android:id/alertTitle" &&
+                it.text?.toString()?.let { title ->
+                    title.startsWith("Pixel Launcher") && title.contains("respond")
+                } == true
+        }
+        if (launcherError != null) {
+            root
+                .find { it.viewIdResourceName == "android:id/aerr_close" }
+                ?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return null
+        }
+        return root.find(predicate)
     }
 
     private fun AccessibilityNodeInfo.find(
