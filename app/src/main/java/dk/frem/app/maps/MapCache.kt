@@ -13,6 +13,8 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,6 +49,9 @@ object MapCache {
 
     private var initialization: CompletableDeferred<Unit>? = null
     private var httpClient: OkHttpClient? = null
+    private var connectivity: MapConnectivity? = null
+    private val connectionUpdates = MutableStateFlow(MapConnection())
+    internal val connection = connectionUpdates.asStateFlow()
     private val viewers = mutableSetOf<Any>()
     private val clearMutex = Mutex()
     private var clearing = false
@@ -82,7 +87,7 @@ object MapCache {
                     .callTimeout(30, TimeUnit.SECONDS)
                     .followSslRedirects(false)
                     .addInterceptor { chain ->
-                        if (!networkAllowed) throw IOException("Map is not visible")
+                        if (!networkAllowed) throw IOException("Map requests suspended")
                         val request = chain.request()
                         if (!request.url.isHttps || request.url.host != "tile.openstreetmap.org") {
                             throw IOException("Unexpected map resource host")
@@ -105,6 +110,11 @@ object MapCache {
             httpClient = client
             HttpRequestUtil.setOkHttpClient(client)
             HttpRequestUtil.setPrintRequestUrlOnFailure(false)
+            connectivity =
+                MapConnectivity(context.applicationContext) {
+                    connectionUpdates.value = it
+                    updateConnectivity()
+                }
             updateConnectivity()
             OfflineManager.getInstance(context.applicationContext)
                 .setMaximumAmbientCacheSize(
@@ -135,21 +145,28 @@ object MapCache {
     /** Used only by visible, resumed map views; never by the GPS recorder. */
     @MainThread
     internal fun startViewing(viewer: Any) {
-        viewers.add(viewer)
+        if (viewers.add(viewer) && viewers.size == 1) connectivity?.start()
         updateConnectivity()
     }
 
     @MainThread
     internal fun stopViewing(viewer: Any) {
         viewers.remove(viewer)
+        if (viewers.isEmpty()) connectivity?.stop()
         updateConnectivity()
     }
 
     @MainThread
+    internal fun refreshConnectivity() {
+        if (viewers.isNotEmpty()) connectivity?.refresh()
+    }
+
+    @MainThread
     private fun updateConnectivity() {
-        networkAllowed = viewers.isNotEmpty() && !clearing
-        // null restores the SDK's real connectivity checks; false suspends its requests/retries.
-        MapLibre.setConnected(if (networkAllowed) null else false)
+        networkAllowed = viewers.isNotEmpty() && !clearing && connection.value.canRequest
+        // Use the same modern connectivity signal as the UI. null would restore the SDK's
+        // separate, deprecated activeNetworkInfo check, which can disagree with this monitor.
+        MapLibre.setConnected(networkAllowed)
         if (!networkAllowed) httpClient?.dispatcher?.cancelAll()
     }
 

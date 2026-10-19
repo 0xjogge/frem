@@ -4,9 +4,6 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.view.View
 import android.view.ViewTreeObserver
@@ -40,6 +37,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -63,9 +61,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dk.frem.app.maps.BasemapState
 import dk.frem.app.maps.DisplayRoute
 import dk.frem.app.maps.MapCache
+import dk.frem.app.maps.MapConnection
+import dk.frem.app.maps.afterTileOperation
+import dk.frem.app.maps.basemapNotice
 import dk.frem.app.maps.buildDisplayRoute
+import dk.frem.app.maps.shouldRetryBasemap
 import dk.frem.app.maps.wrapLongitude
 import dk.frem.app.recording.TrackPoint
 import kotlin.math.ln
@@ -102,7 +106,6 @@ import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
-import org.maplibre.android.tile.TileOperation
 import org.maplibre.geojson.Point
 
 /**
@@ -231,11 +234,23 @@ private fun RecordedMap(route: DisplayRoute, live: Boolean, modifier: Modifier) 
         }
     }
     SideEffect { controller.update(route, live) }
-    val online by mapNetworkAvailable(context, controller.rendering)
+    val connection by MapCache.connection.collectAsStateWithLifecycle()
+    LaunchedEffect(controller, controller.rendering, connection) {
+        controller.connectionChanged(connection)
+    }
     var slow by remember { mutableStateOf(false) }
-    LaunchedEffect(controller.basemapState, controller.rendering, online) {
+    LaunchedEffect(
+        controller.basemapState,
+        controller.rendering,
+        connection,
+        controller.loadAttempt,
+    ) {
         slow = false
-        if (controller.rendering && online && controller.basemapState == BasemapState.Loading) {
+        if (
+            controller.rendering &&
+                connection.canRequest &&
+                controller.basemapState == BasemapState.Loading
+        ) {
             delay(12_000)
             slow = true
         }
@@ -254,13 +269,10 @@ private fun RecordedMap(route: DisplayRoute, live: Boolean, modifier: Modifier) 
                         else "Green: start. Orange: end."
             },
         )
+        val basemapNotice = basemapNotice(connection, controller.basemapState, slow)
         val notice =
             when {
-                !online ->
-                    "Offline · showing cached map tiles where available. Your route is stored on this device."
-                controller.basemapState == BasemapState.Error || slow ->
-                    "Basemap unavailable · your recorded route is still shown."
-                controller.basemapState == BasemapState.Loading -> "Loading map tiles…"
+                basemapNotice != null -> basemapNotice.message
                 route.pointCount == 0 && live ->
                     "No recorded GPS points yet. Start recording to add your route."
                 route.pointCount == 0 -> "No recorded GPS points for this activity."
@@ -270,12 +282,9 @@ private fun RecordedMap(route: DisplayRoute, live: Boolean, modifier: Modifier) 
         if (notice != null) {
             MapNotice(
                 notice,
-                online && !slow && controller.basemapState == BasemapState.Loading,
+                basemapNotice?.loading == true,
                 Modifier.align(Alignment.TopStart),
-                retry =
-                    if (online && (slow || controller.basemapState == BasemapState.Error))
-                        controller::retry
-                    else null,
+                retry = if (basemapNotice?.retry == true) controller::retry else null,
             )
         }
         if (route.pointCount > 0) {
@@ -370,54 +379,6 @@ private fun MapLegend(color: Color, label: String) {
     }
 }
 
-@Composable
-private fun mapNetworkAvailable(context: Context, enabled: Boolean) =
-    produceState(true, context, enabled) {
-        if (!enabled) return@produceState
-        val manager = context.getSystemService(ConnectivityManager::class.java)
-        fun available(): Boolean =
-            try {
-                manager.getNetworkCapabilities(manager.activeNetwork)?.let {
-                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                        it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                } ?: false
-            } catch (_: SecurityException) {
-                true
-            }
-        val callback =
-            object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) {
-                    value = available()
-                }
-
-                override fun onLost(network: Network) {
-                    value = available()
-                }
-
-                override fun onCapabilitiesChanged(
-                    network: Network,
-                    capabilities: NetworkCapabilities,
-                ) {
-                    value = available()
-                }
-            }
-        value = available()
-        val registered =
-            try {
-                manager.registerDefaultNetworkCallback(callback)
-                true
-            } catch (_: SecurityException) {
-                false
-            }
-        awaitDispose { if (registered) manager.unregisterNetworkCallback(callback) }
-    }
-
-private enum class BasemapState {
-    Loading,
-    Ready,
-    Error,
-}
-
 /** Captures native camera/UI state at the actual SaveableStateRegistry save, not only disposal. */
 private class SavedMapState(var bundle: Bundle) {
     var capture: (() -> Bundle)? = null
@@ -487,6 +448,10 @@ private class RecordedMapController(context: Context, saved: Bundle, initialLive
     var basemapState by mutableStateOf(BasemapState.Loading)
         private set
 
+    var loadAttempt by mutableLongStateOf(0L)
+        private set
+
+    private var networkGeneration = 0L
     private var resumed = false
     private var destroyed = false
     private var destroyedState: Bundle? = null
@@ -525,13 +490,7 @@ private class RecordedMapController(context: Context, saved: Bundle, initialLive
         view.addOnTileActionListener { operation, _, _, _, _, _, source ->
             // The SDK delivers map events on the main thread. Never retain tile coordinates.
             if (!destroyed && rendering && source == OSM_SOURCE) {
-                when (operation) {
-                    TileOperation.Error -> basemapState = BasemapState.Error
-                    TileOperation.LoadFromCache,
-                    TileOperation.LoadFromNetwork ->
-                        if (basemapState != BasemapState.Error) basemapState = BasemapState.Ready
-                    else -> Unit
-                }
+                basemapState = basemapState.afterTileOperation(operation)
             }
         }
         view.getMapAsync { ready ->
@@ -571,6 +530,7 @@ private class RecordedMapController(context: Context, saved: Bundle, initialLive
             rendering = visible
             if (visible) {
                 MapCache.startViewing(this)
+                networkGeneration = MapCache.connection.value.generation
                 view.onStart()
                 view.onResume()
                 if (style == null) loadStyle()
@@ -719,6 +679,10 @@ private class RecordedMapController(context: Context, saved: Bundle, initialLive
 
     fun retry() {
         if (!rendering || destroyed) return
+        MapCache.refreshConnectivity()
+        networkGeneration = MapCache.connection.value.generation
+        basemapState = BasemapState.Loading
+        loadAttempt++
         if (style == null) {
             styleRequested = false
             loadStyle()
@@ -728,6 +692,15 @@ private class RecordedMapController(context: Context, saved: Bundle, initialLive
             removeRaster()
             addRaster()
         }
+    }
+
+    fun connectionChanged(connection: MapConnection) {
+        if (!rendering || destroyed) return
+        if (connection.generation < networkGeneration) return
+        val needsRetry = shouldRetryBasemap(networkGeneration, connection, basemapState)
+        networkGeneration = connection.generation
+        // An in-flight local style needs no restart; the native source resumes with connectivity.
+        if (needsRetry && (style != null || basemapState == BasemapState.Error)) retry()
     }
 
     fun fitRoute() {
