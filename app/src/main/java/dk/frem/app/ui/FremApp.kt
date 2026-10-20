@@ -105,6 +105,7 @@ fun FremApp(vm: FremViewModel) {
     val nativeMetrics by vm.nativeMetrics.collectAsStateWithLifecycle()
     val noiseSessions by vm.noiseSessions.collectAsStateWithLifecycle()
     val noiseLive by vm.noiseLive.collectAsStateWithLifecycle()
+    val hearingDestination by vm.hearingDestination.collectAsStateWithLifecycle()
     val recordingBusy by vm.recordingBusy.collectAsStateWithLifecycle()
     val recordingDestination by vm.recordingDestination.collectAsStateWithLifecycle()
     val recordingMessage by vm.recordingMessage.collectAsStateWithLifecycle()
@@ -186,6 +187,12 @@ fun FremApp(vm: FremViewModel) {
     }
     var metric by remember { mutableStateOf<Metric?>(null) }
     var hearingSheet by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(hearingDestination) {
+        if (hearingDestination) {
+            hearingSheet = true
+            vm.hearingDestination.value = false
+        }
+    }
     var logging by remember { mutableStateOf<LogKind?>(null) }
     var editing by remember { mutableStateOf<LogEntry?>(null) }
     var connectionSheet by remember { mutableStateOf(false) }

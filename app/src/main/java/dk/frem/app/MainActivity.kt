@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.FRAME_DIAGNOSTICS) FrameDiagnostics.attach(window)
         viewModel.openReminder(intent.getStringExtra("reminder_kind"))
         viewModel.openRecording(intent.getBooleanExtra("recording", false))
+        viewModel.openHearing(intent.getBooleanExtra("hearing", false))
         setContent { FremApp(viewModel) }
     }
 
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         viewModel.openReminder(intent.getStringExtra("reminder_kind"))
         viewModel.openRecording(intent.getBooleanExtra("recording", false))
+        viewModel.openHearing(intent.getBooleanExtra("hearing", false))
     }
 
     override fun onDestroy() {

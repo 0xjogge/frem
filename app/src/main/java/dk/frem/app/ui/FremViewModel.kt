@@ -24,6 +24,11 @@ class FremViewModel(application: Application) : AndroidViewModel(application) {
     val noiseSessions =
         noise.sessions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val noiseLive = noise.live
+    val hearingDestination = MutableStateFlow(false)
+
+    fun openHearing(open: Boolean) {
+        if (open) hearingDestination.value = true
+    }
 
     fun noiseAction(action: suspend () -> Unit) {
         viewModelScope.launch {

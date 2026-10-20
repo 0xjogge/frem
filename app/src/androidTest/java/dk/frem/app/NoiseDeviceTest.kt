@@ -70,6 +70,11 @@ class NoiseDeviceTest {
             assertEquals(85.0, saved.leqDbA!!, .1)
             assertTrue(saved.dosePercent!! > 0)
             assertEquals(1000L, saved.unmeasuredMillis)
+            await("service stopped") {
+                app.getSystemService(android.app.ActivityManager::class.java)
+                    .getRunningServices(100)
+                    .none { it.service.className == NoiseService::class.java.name }
+            }
         } finally {
             automation.executeShellCommand("input keyevent 224").close()
             if (repository.live.value.session?.state == "RECORDING") {
@@ -90,6 +95,40 @@ class NoiseDeviceTest {
             } ?: false
         val app: FremApplication = ApplicationProvider.getApplicationContext()
         assertTrue("$label: ${app.noise.live.value}", success)
+    }
+
+    @Test
+    fun inputChangesInterruptWithoutReusingCalibrationOrInventingCoverage() = runBlocking {
+        val app: FremApplication = ApplicationProvider.getApplicationContext()
+        val repository = app.noise
+        InstrumentationRegistry.getInstrumentation()
+            .uiAutomation
+            .grantRuntimePermission(app.packageName, Manifest.permission.RECORD_AUDIO)
+        val ready = CompletableDeferred<TestSource>()
+        repository.setSourceFactoryForTesting { TestSource().also { ready.complete(it) } }
+        var id: String? = null
+        try {
+            id = repository.start()
+            val source = withTimeout(10_000) { ready.await() }
+            repeat(2) {
+                source.frames.send(NoiseFrame(tone(), "test/input-a", System.currentTimeMillis()))
+            }
+            await("first input") { repository.live.value.session?.measuredMillis == 1000L }
+            source.frames.send(NoiseFrame(tone(), "test/input-b", System.currentTimeMillis()))
+            await("input interruption") { repository.live.value.session?.state == "INTERRUPTED" }
+            val saved = app.database.noiseDao().session(id)!!
+            assertEquals("test/input-a", saved.inputKey)
+            assertEquals(1000L, saved.measuredMillis)
+            assertNull(saved.leqDbA)
+            assertNull(saved.dosePercent)
+        } finally {
+            if (repository.live.value.session?.state == "RECORDING") {
+                repository.stop()
+                await { repository.live.value.session?.state != "RECORDING" }
+            }
+            repository.setSourceFactoryForTesting(null)
+            id?.let { repository.delete(it) }
+        }
     }
 
     private fun tone() =
