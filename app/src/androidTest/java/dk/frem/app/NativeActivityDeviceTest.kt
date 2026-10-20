@@ -43,9 +43,12 @@ class NativeActivityDeviceTest {
             SystemClock.sleep(5_000)
             (0L..12).forEach {
                 val elapsed = first + it * 400_000_000
-                sensors.channel.send(RecordingSensorEvent.Step(elapsed))
                 val pressure = 1013.25 * Math.pow(1 - it * .5 / 44330, 1 / .190294957)
                 sensors.channel.send(RecordingSensorEvent.Pressure(elapsed, pressure))
+            }
+            // Independent sensor FIFOs may deliver the entire pressure batch before the steps.
+            (0L..12).forEach {
+                sensors.channel.send(RecordingSensorEvent.Step(first + it * 400_000_000))
             }
             repo.pauseAndAwait()
             val saved = app.database.recordingDao().getMetricDays(id).single()

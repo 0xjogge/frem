@@ -12,6 +12,7 @@ internal data class StepMetricDelta(
 internal class StepMetricsProcessor(private val startedAtNanos: Long) {
     private var lastStep: Long? = null
     private val window = ArrayDeque<Long>()
+    private val history = ArrayDeque<Long>()
 
     fun accept(elapsed: Long, now: Long): StepMetricDelta? {
         if (elapsed < startedAtNanos || elapsed > now || now - elapsed > 30_000_000_000L)
@@ -19,6 +20,9 @@ internal class StepMetricsProcessor(private val startedAtNanos: Long) {
         val previous = lastStep
         if (previous != null && elapsed - previous < 200_000_000L) return null
         lastStep = elapsed
+        history.addLast(elapsed)
+        while (history.isNotEmpty() && elapsed - history.first() > 30_000_000_000L) history
+            .removeFirst()
         val continuous = previous != null && elapsed - previous <= 2_000_000_000L
         if (!continuous) window.clear()
         window.addLast(elapsed)
@@ -43,5 +47,5 @@ internal class StepMetricsProcessor(private val startedAtNanos: Long) {
     }
 
     fun walkingAt(elapsed: Long): Boolean =
-        window.count { it <= elapsed && elapsed - it <= 5_000_000_000L } >= 3
+        history.count { it <= elapsed && elapsed - it <= 5_000_000_000L } >= 3
 }

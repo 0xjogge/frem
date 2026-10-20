@@ -95,16 +95,18 @@ internal class AndroidRecordingSensorSource(
                     context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
                         PackageManager.PERMISSION_GRANTED
             ) {
-                manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
-                    steps =
-                        manager.registerListener(
-                            candidate,
-                            it,
-                            SensorManager.SENSOR_DELAY_NORMAL,
-                            5_000_000,
-                            handler,
-                        )
-                }
+                (manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR, true)
+                        ?: manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR))
+                    ?.let {
+                        steps =
+                            manager.registerListener(
+                                candidate,
+                                it,
+                                SensorManager.SENSOR_DELAY_NORMAL,
+                                5_000_000,
+                                handler,
+                            )
+                    }
             }
             val pressure =
                 manager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let {

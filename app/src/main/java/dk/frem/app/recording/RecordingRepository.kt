@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import dk.frem.app.data.FremDatabase
 import java.time.Instant
 import java.time.ZoneId
+import java.util.PriorityQueue
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -69,6 +70,8 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     private var lastMovingNanos: Long? = null
     private var lastGpsAscent = 0.0
     private var lastGpsDescent = 0.0
+    private val pendingPressure =
+        PriorityQueue<RecordingSensorEvent.Pressure>(compareBy { it.elapsedNanos })
     val nativeMetrics: Flow<List<ActivityDayMetrics>> = dao.metricDays()
 
     val sessions: Flow<List<ActivitySession>> = flow {
@@ -151,7 +154,10 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                             cadence = stepProcessor?.cadence(SystemClock.elapsedRealtimeNanos()),
                         )
                 }
-                is RecordingSensorEvent.Barrier -> event.completion.complete(Unit)
+                is RecordingSensorEvent.Barrier -> {
+                    drainPressureLocked(Long.MAX_VALUE)
+                    event.completion.complete(Unit)
+                }
                 is RecordingSensorEvent.Capabilities -> {
                     pressureExpected = event.pressure
                     mutableLive.value =
@@ -164,47 +170,60 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
                 }
                 is RecordingSensorEvent.Pressure -> {
                     val now = SystemClock.elapsedRealtimeNanos()
-                    val walking = stepProcessor?.walkingAt(event.elapsedNanos) == true
-                    val gpsMoving =
-                        lastMovingNanos?.let {
-                            event.elapsedNanos >= it && event.elapsedNanos - it <= 10_000_000_000L
-                        } == true
                     if (
-                        lastPressureNanos?.let { event.elapsedNanos - it > 10_000_000_000L } == true
+                        event.elapsedNanos >= sensorElapsedOrigin &&
+                            event.elapsedNanos <= now &&
+                            now - event.elapsedNanos <= 30_000_000_000L
                     )
-                        pressureProcessor = PressureMetricsProcessor(event.elapsedNanos)
-                    val delta =
-                        pressureProcessor?.accept(
-                            event.elapsedNanos,
-                            event.hectopascals,
-                            now,
-                            walking || gpsMoving,
-                        ) ?: return
-                    pressureExpected = true
-                    lastPressureNanos = event.elapsedNanos
-                    recordElevation(
-                        event.elapsedNanos,
-                        delta.ascent,
-                        delta.descent,
-                        "Barometer",
-                        delta.ascent.takeIf { walking && !request.type.cycling },
-                    )
-                    val previous = current!!
-                    current =
-                        previous.copy(
-                            ascentMeters = (previous.ascentMeters ?: 0.0) + delta.ascent,
-                            descentMeters = (previous.descentMeters ?: 0.0) + delta.descent,
-                            elevationSource =
-                                combinedElevationSource(previous.elevationSource, "Barometer"),
-                        )
-                    mutableServiceSession.value = current
+                        pendingPressure.add(event)
                 }
             }
+            // Independent hardware FIFOs may deliver a pressure batch before the matching steps.
+            // Hold pressure just beyond the 5 s requested sensor latency, retaining original times.
+            drainPressureLocked(SystemClock.elapsedRealtimeNanos() - 6_000_000_000L)
+        }
+    }
+
+    private fun drainPressureLocked(through: Long) {
+        while (pendingPressure.peek()?.let { it.elapsedNanos <= through } == true) {
+            val event = pendingPressure.remove()
+            val session = current ?: continue
+            val walking = stepProcessor?.walkingAt(event.elapsedNanos) == true
+            val gpsMoving =
+                lastMovingNanos?.let {
+                    kotlin.math.abs(event.elapsedNanos - it) <= 10_000_000_000L
+                } == true
+            if (lastPressureNanos?.let { event.elapsedNanos - it > 10_000_000_000L } == true)
+                pressureProcessor = PressureMetricsProcessor(event.elapsedNanos)
+            val delta =
+                pressureProcessor?.accept(
+                    event.elapsedNanos,
+                    event.hectopascals,
+                    SystemClock.elapsedRealtimeNanos(),
+                    walking || gpsMoving,
+                ) ?: continue
+            pressureExpected = true
+            lastPressureNanos = event.elapsedNanos
+            recordElevation(
+                event.elapsedNanos,
+                delta.ascent,
+                delta.descent,
+                "Barometer",
+                delta.ascent.takeIf { walking && !session.type.cycling },
+            )
+            current =
+                session.copy(
+                    ascentMeters = (session.ascentMeters ?: 0.0) + delta.ascent,
+                    descentMeters = (session.descentMeters ?: 0.0) + delta.descent,
+                    elevationSource = combinedElevationSource(session.elevationSource, "Barometer"),
+                )
+            mutableServiceSession.value = current
         }
     }
 
     internal suspend fun sensorUnavailable(request: CaptureRequest) = lock.withLock {
         if (mutableCapture.value == request) {
+            drainPressureLocked(Long.MAX_VALUE)
             pressureExpected = false
             lastPressureNanos = null
             stepProcessor = StepMetricsProcessor(SystemClock.elapsedRealtimeNanos())
@@ -511,6 +530,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
             val session = current ?: return
             if (session.state != RecordingState.RECORDING) return
             val now = SystemClock.elapsedRealtimeNanos()
+            drainPressureLocked(now - 6_000_000_000L)
             if (now - lastMetricCheckpointNanos >= CHECKPOINT_INTERVAL_NANOS) saveMetricsLocked()
             val duration = timeline?.durationMillis(now) ?: session.durationMillis
             val stale =
@@ -656,6 +676,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         }
 
     private suspend fun pauseLocked() {
+        drainPressureLocked(Long.MAX_VALUE)
         val session = current ?: return
         if (session.state != RecordingState.RECORDING) return
         try {
@@ -706,6 +727,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
         sensorWallOrigin = System.currentTimeMillis()
         sensorElapsedOrigin = now
         stepProcessor = StepMetricsProcessor(now)
+        pendingPressure.clear()
         pressureProcessor = PressureMetricsProcessor(now)
         pressureExpected = false
         lastPressureNanos = null
@@ -752,6 +774,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     }
 
     private suspend fun finishLocked(): ActivitySession? {
+        drainPressureLocked(Long.MAX_VALUE)
         val session = current ?: return null
         stopCapture()
         saveMetricsLocked()
@@ -788,6 +811,7 @@ class RecordingRepository(context: Context, private val database: FremDatabase) 
     }
 
     private suspend fun interruptLocked(message: String) {
+        drainPressureLocked(Long.MAX_VALUE)
         val session = current ?: return
         host = null
         stopCapture()

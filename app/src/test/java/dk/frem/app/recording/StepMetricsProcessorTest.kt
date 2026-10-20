@@ -60,4 +60,13 @@ class StepMetricsProcessorTest {
         }
         assertEquals(listOf("2026-10-25" to 90_000_000L), parts)
     }
+
+    @Test
+    fun delayedPressureCanStillMatchStepsFromBeforeAStop() {
+        val processor = StepMetricsProcessor(0)
+        listOf(1_000_000_000L, 1_500_000_000L, 2_000_000_000L).forEach { processor.accept(it, it) }
+        processor.accept(10_000_000_000L, 10_000_000_000L)
+        assertTrue(processor.walkingAt(2_000_000_000L))
+        assertFalse(processor.walkingAt(10_000_000_000L))
+    }
 }

@@ -173,8 +173,7 @@ class RecordingService : Service() {
                 try {
                     if (!repository.registerSensorSource(request, sensors)) return@collectLatest
                     sensors.events().collect { event ->
-                        if (event is RecordingSensorEvent.Barrier) event.completion.complete(Unit)
-                        else repository.acceptSensor(request, event)
+                        repository.acceptSensor(request, event)
                     }
                 } catch (e: CancellationException) {
                     throw e

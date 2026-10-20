@@ -958,9 +958,10 @@ private fun NativeActivityReadings(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Phone activity measurements", style = MaterialTheme.typography.titleMedium)
         Text(
-            "${number(liveCadence ?: average)} steps/min · ${number(days.mapNotNull { it.steps }.takeIf { it.isNotEmpty() }?.sum())} steps",
+            "Moving average: ${number(average)} steps/min · ${number(days.mapNotNull { it.steps }.takeIf { it.isNotEmpty() }?.sum())} steps",
             modifier = Modifier.testTag("native_cadence"),
         )
+        liveCadence?.let { Text("Current cadence: ${number(it)} steps/min") }
         Text(
             "Estimated active time: ${number(if (movingMillis > 0) days.sumOf { it.moderateMillis + it.vigorousMillis } / 60_000.0 else null, 1)} min",
             modifier = Modifier.testTag("native_active_minutes"),
