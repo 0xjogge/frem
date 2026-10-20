@@ -43,6 +43,12 @@ fun PrivacyScreen(onDone: () -> Unit, includeBottomInset: Boolean = false) {
                 "GPS activity recording is separate from daily phone recording. When you start a walk, hike, run, or ride, Frem requests precise location and records your route, distance, and recording time in its private on-device database. An Android foreground service continues recording with the screen locked. Location collection stops when you pause, finish, or discard the activity. Frem does not automatically detect or record outings.",
             )
             Text(
+                "During recorded activities, available hardware step and pressure sensors also supply cadence, estimated moderate/vigorous minutes, floor equivalents, and elevation gain/loss. Sensor collection stops with the activity. These summaries are stored separately from Health Connect imports; daily recording subtotals are labelled with their limited coverage.",
+            )
+            Text(
+                "Environmental-noise sessions use the built-in microphone only after you tap Start and grant microphone access. A microphone foreground service can continue with the screen locked. Audio samples are processed in memory; Frem saves numerical sound-level summaries and calibration, never audio. Finish stops microphone collection. Uncalibrated readings are digital levels, with no SPL or dose estimate. Noise sessions are local and are not shared with Health Connect; CSV exports include their numerical summaries. Deleting a noise session removes its saved summary.",
+            )
+            Text(
                 "Activity maps use OpenStreetMap tiles loaded directly from tile.openstreetmap.org. Map requests reveal your connection information and the map areas you view to OpenStreetMap’s servers. Frem does not upload your recorded route to a map service. Previously viewed map tiles are cached separately, up to 100 MiB, and can be cleared in Settings without deleting your activities. Uncached map areas require a connection; GPS recording and saving work offline.",
             )
             Text(
