@@ -89,24 +89,36 @@ abstract class FremDatabase : RoomDatabase() {
     abstract fun noiseDao(): NoiseDao
 
     companion object {
+        val migrations: Array<androidx.room.migration.Migration>
+            get() =
+                arrayOf(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                )
+
         val MIGRATION_7_8 =
             object : androidx.room.migration.Migration(7, 8) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                     db.execSQL(
                         """
                         CREATE TABLE IF NOT EXISTS noise_sessions (
-                                            id TEXT NOT NULL PRIMARY KEY, start INTEGER NOT NULL, end INTEGER, state TEXT NOT NULL,
-                                            inputKey TEXT, calibrationOffsetDb REAL, measuredMillis INTEGER NOT NULL,
-                                            energyMillis REAL NOT NULL, maximumDbfs REAL, unmeasuredMillis INTEGER NOT NULL,
-                                            doseFraction REAL NOT NULL)
+                            id TEXT NOT NULL PRIMARY KEY, start INTEGER NOT NULL, end INTEGER, state TEXT NOT NULL,
+                            inputKey TEXT, calibrationOffsetDb REAL, measuredMillis INTEGER NOT NULL,
+                            energyMillis REAL NOT NULL, maximumDbfs REAL, unmeasuredMillis INTEGER NOT NULL,
+                            doseFraction REAL NOT NULL)
                         """
                             .trimIndent(),
                     )
                     db.execSQL(
                         """
                         CREATE TABLE IF NOT EXISTS noise_calibrations (
-                                            inputKey TEXT NOT NULL PRIMARY KEY, offsetDb REAL NOT NULL,
-                                            referenceDb REAL NOT NULL, calibratedAt INTEGER NOT NULL)
+                            inputKey TEXT NOT NULL PRIMARY KEY, offsetDb REAL NOT NULL,
+                            referenceDb REAL NOT NULL, calibratedAt INTEGER NOT NULL)
                         """
                             .trimIndent(),
                     )
@@ -138,11 +150,11 @@ abstract class FremDatabase : RoomDatabase() {
                     db.execSQL(
                         """
                         CREATE TABLE IF NOT EXISTS activity_day_metrics (
-                                            sessionId TEXT NOT NULL, date TEXT NOT NULL, steps INTEGER,
-                                            cadenceSteps REAL NOT NULL, cadenceMillis INTEGER NOT NULL,
-                                            moderateMillis INTEGER NOT NULL, vigorousMillis INTEGER NOT NULL,
-                                            PRIMARY KEY(sessionId, date), FOREIGN KEY(sessionId) REFERENCES activity_sessions(id)
-                                            ON UPDATE NO ACTION ON DELETE CASCADE)
+                            sessionId TEXT NOT NULL, date TEXT NOT NULL, steps INTEGER,
+                            cadenceSteps REAL NOT NULL, cadenceMillis INTEGER NOT NULL,
+                            moderateMillis INTEGER NOT NULL, vigorousMillis INTEGER NOT NULL,
+                            PRIMARY KEY(sessionId, date), FOREIGN KEY(sessionId) REFERENCES activity_sessions(id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE)
                         """
                             .trimIndent(),
                     )

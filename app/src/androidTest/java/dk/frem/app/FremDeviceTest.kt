@@ -171,11 +171,7 @@ class FremDeviceTest {
         }
         val migrated =
             Room.databaseBuilder(context, FremDatabase::class.java, name)
-                .addMigrations(
-                    FremDatabase.MIGRATION_1_2,
-                    FremDatabase.MIGRATION_2_3,
-                    FremDatabase.MIGRATION_3_4,
-                )
+                .addMigrations(*FremDatabase.migrations)
                 .build()
         try {
             assertEquals(81.2, migrated.dao().entry("migration-weight")!!.value, .001)

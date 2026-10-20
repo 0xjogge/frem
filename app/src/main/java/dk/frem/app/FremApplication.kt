@@ -9,15 +9,7 @@ import dk.frem.app.recording.RecordingRepository
 class FremApplication : Application() {
     val database: FremDatabase by lazy {
         Room.databaseBuilder(this, FremDatabase::class.java, "frem.db")
-            .addMigrations(
-                FremDatabase.MIGRATION_1_2,
-                FremDatabase.MIGRATION_2_3,
-                FremDatabase.MIGRATION_3_4,
-                FremDatabase.MIGRATION_4_5,
-                FremDatabase.MIGRATION_5_6,
-                FremDatabase.MIGRATION_6_7,
-                FremDatabase.MIGRATION_7_8,
-            )
+            .addMigrations(*FremDatabase.migrations)
             .build()
     }
 
